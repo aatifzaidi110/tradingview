@@ -157,4 +157,4 @@ if ticker:
     with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
         - **RSI (Relative Strength Index)**: Momentum oscillator.  
-          *Ideal:*
+          *Ideal:*"")
