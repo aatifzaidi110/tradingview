@@ -50,91 +50,99 @@ if ticker:
 
     last = df.iloc[-1]
 
-    # === Technical Passes ===
-    bull_ema_stack = last["EMA21"] > last["EMA50"] > last["EMA200"]
-    macd_bullish = last["MACD_diff"] > 0
-    price_below_bb = price < last["BB_low"]
-    rsi_entry = last["RSI"] < 30 or last["RSI"] > 50
-    rsi_exit = last["RSI"] > 85
-    atr_breakout = price > previous_close + last["ATR"]
-    atr_breakdown = price < previous_close - last["ATR"]
-    volume_spike = last["Volume"] > last["Vol_Avg"] * 1.5
+    # === Technical Signals ===
+    signals = {
+        "RSI": last["RSI"] < 30 or last["RSI"] > 50,
+        "MACD": last["MACD_diff"] > 0,
+        "EMA": last["EMA21"] > last["EMA50"] > last["EMA200"],
+        "ATR": price > previous_close + last["ATR"],
+        "Volume": last["Volume"] > last["Vol_Avg"] * 1.5,
+        "BB": price < last["BB_low"]
+    }
 
-    entry_conditions = [price_below_bb, bull_ema_stack, macd_bullish, atr_breakout]
-    exit_conditions = [rsi_exit, not bull_ema_stack, not macd_bullish, atr_breakdown]
+    weights = {
+        "RSI": 20,
+        "MACD": 20,
+        "EMA": 15,
+        "ATR": 15,
+        "Volume": 15,
+        "BB": 15
+    }
 
-    entry_trigger = all(entry_conditions)
-    exit_trigger = all(exit_conditions)
+    technical_score = sum([weights[key] for key in signals if signals[key]])
+
+    sentiment_score = 10  # Temporary placeholder
+    expert_score = 10     # Temporary placeholder
+
+    overall_confidence = round(
+        0.6 * technical_score +
+        0.2 * sentiment_score +
+        0.2 * expert_score,
+        2
+    )
+
     stop_loss = round(price - last["ATR"], 2)
-
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
-    
-     # === Chart Snapshot ===
+
+    # === Chart Snapshot ===
     st.subheader("🖼️ Chart Snapshot")
     chart_path = "chart.png"
-    mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
+    mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
+    # === Recommended Timeframes ===
+    with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
+        st.markdown("""
+        - **Scalp Trading** → 1-min or 5-min for precision  
+        - **Day Trading** → 15-min to 1-hour for intraday setups  
+        - **Swing Trading** → 1-day charts for multi-session trends  
+        - **Position Trades / Investing** → Weekly charts for macro view  
+        """)
 
- # === Overall Confidence Score ===
+    # === Overall Confidence Score ===
     st.subheader("🧠 Overall Confidence Score")
-    technical_score = 70 if entry_trigger else 50
-    sentiment_score = 15
-    expert_score = 15
-    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
     st.write(f"Confidence Level: **{overall_confidence}/100**")
     st.progress(overall_confidence)
 
-    # === Technical Table ===
+    # === Technical Indicator Table ===
     st.subheader("📊 Technical Indicator Breakdown")
     st.markdown(f"""
 | **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                               | **Status** |
 |-------------------|--------------------------|------------------------------------------------------------------------|------------|
-| **RSI**           | {last['RSI']:.2f}         | Momentum. Ideal: <30 for entry, >85 signals overbought                | {color_status(rsi_entry and last['RSI'] < 85)} |
-| **MACD Diff**     | {last['MACD_diff']:.2f}   | Trend momentum. Ideal: >0 confirms bullish crossover                   | {color_status(macd_bullish)} |
-| **EMA Stack**     | 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} | Trend strength. Ideal: EMA21 > EMA50 > EMA200                          | {color_status(bull_ema_stack)} |
-| **ATR Breakout**  | {round(last['ATR'],2)}    | Volatility. Ideal: Price > Prev Close + ATR                            | {color_status(atr_breakout)} |
-| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Interest. Ideal: Volume > 1.5× 50-day average                          | {color_status(volume_spike)} |
-| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Volatility zone. Ideal: Entry if price below lower band               | {color_status(price_below_bb)} |
+| **RSI**           | {last['RSI']:.2f}         | Momentum. Ideal: <30 entry, >85 exit                                  | {color_status(signals["RSI"])} |
+| **MACD Diff**     | {last['MACD_diff']:.2f}   | Bullish momentum. Ideal: >0                                            | {color_status(signals["MACD"])} |
+| **EMA Stack**     | 21>{last['EMA21']:.2f} > 50>{last['EMA50']:.2f} > 200>{last['EMA200']:.2f} | Trend alignment. Ideal: 21 > 50 > 200                     | {color_status(signals["EMA"])} |
+| **ATR Breakout**  | {last['ATR']:.2f}         | Volatility. Ideal: Price > Prev Close + ATR                           | {color_status(signals["ATR"])} |
+| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Activity. Ideal: Volume > 1.5× average               | {color_status(signals["Volume"])} |
+| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Entry zone. Ideal: Bounce near lower band                         | {color_status(signals["BB"])} |
 """)
-  
+
     # === Indicator Glossary ===
     with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
-- **RSI (Relative Strength Index)**: Momentum oscillator.  
-  - *Ideal:* <30 for entry, >85 for exit  
-- **MACD**: Trend confirmation.  
-  - *Ideal:* MACD diff > 0 indicates bullish crossover  
-- **EMA Stack**: Trend strength.  
-  - *Ideal:* EMA21 > EMA50 > EMA200 = bullish alignment  
-- **ATR (Average True Range)**: Measures volatility.  
-  - *Ideal:* Price movement beyond ATR suggests breakout  
-- **Bollinger Bands**: Volatility zones.  
-  - *Ideal:* Price near or below lower band may signal bounce  
-- **Volume Spike**: Breakout validation.  
-  - *Ideal:* Volume > 1.5× 50-day average  
+- **RSI (Relative Strength Index)**: Momentum indicator  
+- **MACD Diff**: Trend momentum signal  
+- **EMA Stack**: Measures trend strength  
+- **ATR (Average True Range)**: Shows volatility boundaries  
+- **Bollinger Bands**: Entry zone indicators  
+- **Volume Spike**: Validates interest behind breakout  
         """)
 
-    # === Strategy Logic ===
-    st.subheader("🎯 Strategy Logic")
-    if entry_trigger:
-        st.success("✅ Entry Signal Met")
+    # === Strategy Recommendations ===
+    st.subheader("🎯 Strategy Recommendation")
+    if technical_score >= 80:
+        st.success("✅ Entry Signal Met — High Conviction")
         st.write(f"Suggested Stop Loss: ${stop_loss}")
-    elif exit_trigger:
-        st.warning("⚠️ Exit Signal Triggered")
+    elif technical_score >= 60:
+        st.info("⏳ Watchlist Setup — Wait for Confirmation")
     else:
-        st.info("⏳ Watchlist Candidate — No Trade Signal")
+        st.warning("🚫 Weak Signal — Avoid or Monitor")
 
     # === Support / Resistance ===
     st.subheader("📈 Support & Resistance")
-    st.write(f"- Nearest Support: ${support:.2f}")
-    st.write(f"- Nearest Resistance: ${resistance:.2f}")
-
-    # === Earnings / Dividends ===
-    st.subheader("🗓️ Earnings & Dividends")
-    st.write(f"Next Earnings: {earnings}")
-    st.write(f"Next Dividend: {dividend}")
+    st.write(f"- Support: ${support:.2f}")
+    st.write(f"- Resistance: ${resistance:.2f}")
 
     # === Sentiment & Expert Links ===
     st.subheader("💬 Sentiment & Expert Scores")
@@ -157,6 +165,13 @@ if ticker:
             "Timestamp": timestamp,
             "Ticker": ticker.upper(),
             "Confidence": overall_confidence,
-            "Entry Trigger": entry_trigger,
-            "Exit Trigger": exit_trigger,
-            }
+            "Technical Score": technical_score,
+            "Sentiment Score": sentiment_score,
+            "Expert Score": expert_score,
+            "Stop Loss": stop_loss,
+            "Notes": note
+        }
+        log_df = pd.DataFrame([journal_entry])
+        if os.path.exists("journal.csv"):
+            log_df.to_csv("journal.csv", mode="a", header=False, index=False)
+        else:
