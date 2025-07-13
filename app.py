@@ -3,132 +3,153 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import ta
-import datetime
 import mplfinance as mpf
+import datetime
+import os
 
-# === CONFIG ===
-st.set_page_config(page_title="Aatif's Swing Trade Analyzer", layout="centered")
-st.title("📊 Swing Trade Analyzer by Aatif")
+# === App Setup ===
+st.set_page_config(page_title="Aatif's Swing Dashboard", layout="centered")
+st.title("📊 Aatif's Swing Trade Analyzer")
+
+# === Ticker Input ===
 ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 
-# === FETCH DATA ===
+def status(flag):
+    return "✅" if flag else "❌"
+
+# === Data Fetching ===
 def get_data(symbol):
     stock = yf.Ticker(symbol)
     hist = stock.history(period="6mo")
     info = stock.info
-    earnings = info.get("nextEarningsDate", "N/A")
+    price = info.get("currentPrice", hist["Close"].iloc[-1])
+    previous_close = info.get("previousClose", hist["Close"].iloc[-2])
+    earnings = info.get("earningsDate", "N/A")
     dividend = info.get("dividendDate", "N/A")
-    price = info.get("currentPrice", hist['Close'].iloc[-1])
-    previous_close = info.get("previousClose", hist['Close'].iloc[-2])
-    return hist, info, earnings, dividend, price, previous_close
+    return hist, info, price, previous_close, earnings, dividend
 
+# === Dashboard Logic ===
 if ticker:
-    hist, info, earnings, dividend, price, previous_close = get_data(ticker)
-
-    # === INDICATORS ===
+    hist, info, price, previous_close, earnings, dividend = get_data(ticker)
     df = hist.copy()
-    df['ema21'] = ta.trend.ema_indicator(df['Close'], window=21)
-    df['ema50'] = ta.trend.ema_indicator(df['Close'], window=50)
-    df['ema200'] = ta.trend.ema_indicator(df['Close'], window=200)
-    df['rsi'] = ta.momentum.RSIIndicator(df['Close']).rsi()
-    bb = ta.volatility.BollingerBands(df['Close'])
-    df['bb_high'] = bb.bollinger_hband()
-    df['bb_low'] = bb.bollinger_lband()
-    df['atr'] = ta.volatility.AverageTrueRange(df['High'], df['Low'], df['Close']).average_true_range()
-    df['macd'] = ta.trend.macd_diff(df['Close'])
-    df['volume_avg'] = df['Volume'].rolling(window=50).mean()
+
+    # === Indicators ===
+    df["EMA21"] = ta.trend.ema_indicator(df["Close"], 21)
+    df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
+    df["EMA200"] = ta.trend.ema_indicator(df["Close"], 200)
+    df["RSI"] = ta.momentum.RSIIndicator(df["Close"]).rsi()
+    bb = ta.volatility.BollingerBands(df["Close"])
+    df["BB_high"] = bb.bollinger_hband()
+    df["BB_low"] = bb.bollinger_lband()
+    df["MACD_diff"] = ta.trend.macd_diff(df["Close"])
+    df["ATR"] = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"]).average_true_range()
+    df["Vol_Avg"] = df["Volume"].rolling(50).mean()
 
     last = df.iloc[-1]
-    bull_stack = last['ema21'] > last['ema50'] > last['ema200']
-    bear_stack = last['ema21'] < last['ema50'] < last['ema200']
-    macd_bull = last['macd'] > 0
-    macd_bear = last['macd'] < 0
-    atr_breakout = price > previous_close + last['atr']
-    atr_breakdown = price < previous_close - last['atr']
-    vol_spike = last['Volume'] > last['volume_avg'] * 1.5
 
-    # === STRATEGY LOGIC ===
-    entry_pass = (price < last['bb_low']) and bull_stack and macd_bull and atr_breakout
-    exit_pass = (last['rsi'] > 85) and bear_stack and macd_bear and atr_breakdown
-    stop_loss = round(price - last['atr'], 2)
+    # === Technical Passes ===
+    bull_ema_stack = last["EMA21"] > last["EMA50"] > last["EMA200"]
+    bearish_ema_stack = last["EMA21"] < last["EMA50"] < last["EMA200"]
+    macd_bullish = last["MACD_diff"] > 0
+    macd_bearish = last["MACD_diff"] < 0
+    price_below_bb = price < last["BB_low"]
+    price_above_bb = price > last["BB_high"]
+    rsi_entry = last["RSI"] < 30 or last["RSI"] > 50
+    rsi_exit = last["RSI"] > 85
+    atr_breakout = price > previous_close + last["ATR"]
+    atr_breakdown = price < previous_close - last["ATR"]
+    volume_spike = last["Volume"] > last["Vol_Avg"] * 1.5
 
-    # === CHART SNAPSHOT ===
+    # === Strategy Recommendation ===
+    entry_conditions = [price_below_bb, bull_ema_stack, macd_bullish, atr_breakout]
+    exit_conditions = [rsi_exit, bearish_ema_stack, macd_bearish, atr_breakdown]
+
+    entry_trigger = all(entry_conditions)
+    exit_trigger = all(exit_conditions)
+    stop_loss = round(price - last["ATR"], 2)
+
+    # === Support / Resistance ===
+    support = df["Low"].rolling(20).min().iloc[-1]
+    resistance = df["High"].rolling(20).max().iloc[-1]
+
+    # === Chart Snapshot ===
     st.subheader("🖼️ Chart Snapshot")
-    mpf.plot(hist[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig='chart.png')
-    st.image("chart.png", caption=f"{ticker.upper()} - Last 60 Days")
+    chart_path = "chart.png"
+    mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
+    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
-    # === TECHNICALS ===
-    st.subheader("📊 Technical Indicators")
-    def status(flag): return "✅ Pass" if flag else "❌ Fail"
-    st.write(f"Price: ${price:.2f}")
-    st.write(f"Previous Close: ${previous_close:.2f}")
-    st.write(f"Bollinger Lower Band: ${last['bb_low']:.2f} → {status(price < last['bb_low'])}")
-    st.write(f"RSI: {last['rsi']:.2f} → {status(last['rsi'] < 30 or last['rsi'] > 50)}")
-    st.write(f"MACD Diff: {last['macd']:.2f} → {status(macd_bull)}")
-    st.write(f"EMA Stack: {round(last['ema21'],2)} > {round(last['ema50'],2)} > {round(last['ema200'],2)} → {status(bull_stack)}")
-    st.write(f"ATR: {last['atr']:.2f} → Breakout: {status(atr_breakout)}")
-    st.write(f"Volume: {last['Volume']:.0f} | Avg(50): {last['volume_avg']:.0f} → {status(vol_spike)}")
+    # === Indicator Display ===
+    st.subheader("📊 Technical Breakdown")
+    st.write(f"Price: ${price:.2f} | Previous Close: ${previous_close:.2f}")
+    st.write(f"- Bollinger Lower Band: ${last['BB_low']:.2f} {status(price_below_bb)}")
+    st.write(f"- RSI: {last['RSI']:.2f} (entry zone <30, exit >85) {status(rsi_entry)}")
+    st.write(f"- MACD Diff: {last['MACD_diff']:.2f} {status(macd_bullish)}")
+    st.write(f"- EMA Stack: 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} {status(bull_ema_stack)}")
+    st.write(f"- ATR: {round(last['ATR'],2)} → Breakout: {status(atr_breakout)}")
+    st.write(f"- Volume: {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} {status(volume_spike)}")
 
-    # === STRATEGY SIGNAL ===
-    st.subheader("🎯 Strategy Recommendation")
-    if entry_pass:
-        st.success("✅ Swing Entry Triggered")
+    # === Strategy Logic ===
+    st.subheader("🎯 Strategy Logic")
+    if entry_trigger:
+        st.success("✅ Entry Signal Met")
         st.write(f"Suggested Stop Loss: ${stop_loss}")
-    elif exit_pass:
-        st.warning("⚠️ Exit Signal Active")
+    elif exit_trigger:
+        st.warning("⚠️ Exit Signal Triggered")
     else:
-        st.info("⏳ No Entry/Exit Signal - Watchlist Candidate")
+        st.info("⏳ Watchlist Candidate — No Trade Signal")
 
-    # === SUPPORT / RESISTANCE ===
-    st.subheader("📈 Support / Resistance")
-    support = df['Low'].rolling(window=20).min().iloc[-1]
-    resistance = df['High'].rolling(window=20).max().iloc[-1]
-    st.write(f"Nearest Support: ${support:.2f}")
-    st.write(f"Nearest Resistance: ${resistance:.2f}")
+    # === Support / Resistance ===
+    st.subheader("📈 Support & Resistance")
+    st.write(f"- Nearest Support: ${support:.2f}")
+    st.write(f"- Nearest Resistance: ${resistance:.2f}")
 
-    # === EVENTS ===
+    # === Earnings / Dividends ===
     st.subheader("🗓️ Earnings & Dividends")
-    st.write(f"Next Earnings Date: {earnings}")
-    st.write(f"Dividend Info: {dividend if dividend != 'N/A' else 'No upcoming dividend'}")
+    st.write(f"Next Earnings: {earnings}")
+    st.write(f"Next Dividend: {dividend}")
 
-    # === SENTIMENT & LINKS ===
-    st.subheader("💬 Sentiment & Expert Analysis")
+    # === Sentiment & Expert Links ===
+    st.subheader("💬 Sentiment & Expert Scores")
     google_news = f"https://news.google.com/search?q={ticker}+stock"
     finviz = f"https://finviz.com/quote.ashx?t={ticker}"
     barchart = f"https://www.barchart.com/stocks/quotes/{ticker}/overview"
     tipranks = f"https://www.tipranks.com/stocks/{ticker}/forecast"
-    yahoo = f"https://finance.yahoo.com/quote/{ticker}"
-    st.markdown(f"- [📰 News Headlines]({google_news})")
-    st.markdown(f"- [📊 Finviz Overview]({finviz})")
-    st.markdown(f"- [📈 Barchart Opinion]({barchart})")
-    st.markdown(f"- [🎯 TipRanks Forecast]({tipranks})")
-    st.markdown(f"- [💼 Yahoo Finance Summary]({yahoo})")
+    st.markdown(f"- [📰 Google News]({google_news})")
+    st.markdown(f"- [📊 Finviz]({finviz})")
+    st.markdown(f"- [📈 Barchart]({barchart})")
+    st.markdown(f"- [🎯 TipRanks]({tipranks})")
 
-    # === BACKTESTING (Simulated Logic) ===
-    st.subheader("🔁 Backtest Summary (Simulated)")
+    # === Simulated Backtest ===
+    st.subheader("🔁 Simulated Backtest (Last 30 Bars)")
     recent = df[-30:]
-    trades = []
-    in_trade = False
-    entry_price = 0
+    trades, in_trade, entry_price = [], False, 0
 
     for i in range(len(recent)):
         row = recent.iloc[i]
-        cond_entry = row['Close'] < row['bb_low'] and row['ema21'] > row['ema50'] > row['ema200'] and row['macd'] > 0
-        cond_exit = row['rsi'] > 85 and row['macd'] < 0
+        cond_entry = row["Close"] < row["BB_low"] and row["EMA21"] > row["EMA50"] > row["EMA200"] and row["MACD_diff"] > 0
+        cond_exit = row["RSI"] > 85 and row["MACD_diff"] < 0
 
         if cond_entry and not in_trade:
-            entry_price = row['Open']
+            entry_price = row["Open"]
             in_trade = True
         elif cond_exit and in_trade:
-            exit_price = row['Open']
+            exit_price = row["Open"]
             trades.append(exit_price - entry_price)
             in_trade = False
 
     if trades:
-        win_rate = round(100 * len([p for p in trades if p > 0]) / len(trades), 2)
+        win_rate = round(100 * len([t for t in trades if t > 0]) / len(trades), 2)
         avg_pl = round(np.mean(trades), 2)
-        st.write(f"Trades Simulated: {len(trades)}")
-        st.write(f"Win Rate: {win_rate}% → {status(win_rate > 60)}")
-        st.write(f"Avg Profit/Loss: ${avg_pl} → {status(avg_pl > 0)}")
+        st.write(f"Trades: {len(trades)} | Win Rate: {win_rate}% | Avg P/L: ${avg_pl}")
     else:
-        st.write("No trades triggered in last 30 bars")
+        st.write("No trades triggered in last 30 bars.")
+
+    # === Indicator Glossary ===
+    with st.expander("📘 What Each Indicator Means"):
+        st.markdown("""
+        - **RSI (Relative Strength Index)**: Measures momentum.  
+          - *Ideal:* <30 = Oversold (entry), >70 = Overbought (exit)
+        - **MACD**: Trend momentum.  
+          - *Ideal:* MACD > Signal = Bullish
+        - **EMA Stack**: Trend strength.  
+          - *Ideal:* EMA21 > """)
