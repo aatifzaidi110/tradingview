@@ -158,3 +158,4 @@ if ticker:
             "Confidence": overall_confidence,
             "Entry Trigger": entry_trigger,
             "Exit Trigger": exit_trigger,
+            }
