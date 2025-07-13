@@ -119,6 +119,15 @@ if ticker:
     st.markdown(f"- [📈 Barchart]({barchart})")
     st.markdown(f"- [🎯 TipRanks]({tipranks})")
 
+    # === Overall Confidence Score ===
+    st.subheader("🧠 Overall Confidence Score")
+    technical_score = 70 if entry_trigger else 50
+    sentiment_score = 15  # Placeholder for NLP logic
+    expert_score = 15     # Placeholder for analyst consensus logic
+    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
+    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.progress(overall_confidence)
+
     # === Simulated Backtest ===
     st.subheader("🔁 Simulated Backtest (Last 30 Bars)")
     recent = df[-30:]
@@ -145,59 +154,7 @@ if ticker:
         st.write("No trades triggered in last 30 bars.")
 
     # === Indicator Glossary ===
-    with st.expander("📘 What Each Indicator Means"):
+    with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
-        - **RSI (Relative Strength Index)**: Measures momentum.  
-          - *Ideal:* <30 = Oversold (entry), >70 = Overbought (exit)
-        - **MACD**: Trend momentum.  
-          - *Ideal:* MACD > Signal = Bullish
-        - **EMA Stack**: Trend strength.  
-          - *Ideal:* EMA21 > """)
-=======
-##//app.py
-import streamlit as st
-import random
-import urllib.parse
-
-# === App Header ===
-st.set_page_config(page_title="Swing Trade Analyzer", layout="centered")
-st.title("📊 Aatif's Swing Trade Dashboard")
-
-# === Ticker Input ===
-ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
-
-if ticker:
-    st.subheader(f"📈 Analysis for {ticker.upper()}")
-
-    # === Simulated Confidence Score ===
-    score = random.randint(40, 100)
-
-    # === Strategy Signal ===
-    if score >= 85:
-        signal = "✅ Buy Zone"
-        strategy = "Swing Entry Recommended"
-    elif score >= 65:
-        signal = "⏳ Watchlist"
-        strategy = "Partial Entry or Wait"
-    else:
-        signal = "🚫 Avoid"
-        strategy = "No Entry Recommended"
-
-    st.write(f"🧠 Confidence Score: **{score}**")
-    st.write(f"{signal} — *{strategy}*")
-
-    # === Expert Analysis Links ===
-    encoded_ticker = urllib.parse.quote(ticker)
-    google_news = f"https://news.google.com/search?q={encoded_ticker}+stock"
-    finviz = f"https://finviz.com/quote.ashx?t={ticker}"
-    barchart = f"https://www.barchart.com/stocks/quotes/{ticker}/overview"
-    tipranks = f"https://www.tipranks.com/stocks/{ticker}/forecast"
-    yahoo = f"https://finance.yahoo.com/quote/{ticker}"
-
-    st.subheader("💬 Expert & Sentiment Links")
-    st.markdown(f"- [Google News Sentiment]({google_news})")
-    st.markdown(f"- [Finviz Overview]({finviz})")
-    st.markdown(f"- [Barchart Technical Opinion]({barchart})")
-    st.markdown(f"- [TipRanks Analyst Forecast]({tipranks})")
-    st.markdown(f"- [Yahoo Finance Summary]({yahoo})")
-
+        - **RSI (Relative Strength Index)**: Momentum oscillator.  
+          *Ideal:*
