@@ -76,13 +76,6 @@ if ticker:
     mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
-with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
-    st.markdown("""
-    - **Scalp Trading** → Use 1-min or 5-min charts for precision and quick reactions  
-    - **Day Trading** → 15-min to 1-hour for intraday pattern visibility  
-    - **Swing Trading** → 1-day chart helps confirm trend setups across multiple sessions  
-    - **Position Trades / Investing** → Weekly charts for trend strength & macro context  
-    """)
 
  # === Overall Confidence Score ===
     st.subheader("🧠 Overall Confidence Score")
