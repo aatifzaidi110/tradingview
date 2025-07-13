@@ -5,11 +5,3 @@ ta
 mplfinance
 pandas
 numpy
-=======
-streamlit
-yfinance
-ta
-mplfinance
-pandas
-numpy
-
