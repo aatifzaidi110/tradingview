@@ -49,26 +49,21 @@ if ticker:
 
     # === Technical Passes ===
     bull_ema_stack = last["EMA21"] > last["EMA50"] > last["EMA200"]
-    bearish_ema_stack = last["EMA21"] < last["EMA50"] < last["EMA200"]
     macd_bullish = last["MACD_diff"] > 0
-    macd_bearish = last["MACD_diff"] < 0
     price_below_bb = price < last["BB_low"]
-    price_above_bb = price > last["BB_high"]
     rsi_entry = last["RSI"] < 30 or last["RSI"] > 50
     rsi_exit = last["RSI"] > 85
     atr_breakout = price > previous_close + last["ATR"]
     atr_breakdown = price < previous_close - last["ATR"]
     volume_spike = last["Volume"] > last["Vol_Avg"] * 1.5
 
-    # === Strategy Recommendation ===
     entry_conditions = [price_below_bb, bull_ema_stack, macd_bullish, atr_breakout]
-    exit_conditions = [rsi_exit, bearish_ema_stack, macd_bearish, atr_breakdown]
+    exit_conditions = [rsi_exit, not bull_ema_stack, not macd_bullish, atr_breakdown]
 
     entry_trigger = all(entry_conditions)
     exit_trigger = all(exit_conditions)
     stop_loss = round(price - last["ATR"], 2)
 
-    # === Support / Resistance ===
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
 
@@ -78,25 +73,31 @@ if ticker:
     mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
-    # === Indicator Display ===
-    st.subheader("📊 Technical Breakdown")
-    st.write(f"Price: ${price:.2f} | Previous Close: ${previous_close:.2f}")
-    st.write(f"- Bollinger Lower Band: ${last['BB_low']:.2f} {status(price_below_bb)}")
-    st.write(f"- RSI: {last['RSI']:.2f} (entry zone <30, exit >85) {status(rsi_entry)}")
-    st.write(f"- MACD Diff: {last['MACD_diff']:.2f} {status(macd_bullish)}")
-    st.write(f"- EMA Stack: 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} {status(bull_ema_stack)}")
-    st.write(f"- ATR: {round(last['ATR'],2)} → Breakout: {status(atr_breakout)}")
-    st.write(f"- Volume: {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} {status(volume_spike)}")
-    
-     # === Overall Confidence Score ===
+    # === Overall Confidence Score ===
     st.subheader("🧠 Overall Confidence Score")
     technical_score = 70 if entry_trigger else 50
-    sentiment_score = 15  # Placeholder for NLP logic
-    expert_score = 15     # Placeholder for analyst consensus logic
+    sentiment_score = 15
+    expert_score = 15
     overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
     st.write(f"Confidence Level: **{overall_confidence}/100**")
     st.progress(overall_confidence)
 
+    # === Indicator Glossary ===
+    with st.expander("📘 Indicator Glossary & Strategy Guide"):
+        st.markdown("""
+        - **RSI (Relative Strength Index)**: Momentum oscillator.  
+          - *Ideal:* <30 for entry, >85 for exit
+        - **MACD**: Trend confirmation.  
+          - *Ideal:* Positive MACD diff indicates bullish crossover
+        - **EMA Stack (21/50/200)**: Trend strength.  
+          - *Ideal:* EMA21 > EMA50 > EMA200 = strong bullish alignment
+        - **ATR (Average True Range)**: Measures volatility.  
+          - *Ideal:* Price movement beyond ATR suggests breakout
+        - **Bollinger Bands**: Identifies volatility zones.  
+          - *Ideal:* Price near or below lower band may signal bounce
+        - **Volume Spike**: Validates breakout.  
+          - *Ideal:* Volume > 1.5× average confirms interest
+        """)
 
     # === Strategy Logic ===
     st.subheader("🎯 Strategy Logic")
@@ -129,42 +130,24 @@ if ticker:
     st.markdown(f"- [📈 Barchart]({barchart})")
     st.markdown(f"- [🎯 TipRanks]({tipranks})")
 
-    # === Overall Confidence Score ===
-    st.subheader("🧠 Overall Confidence Score")
-    technical_score = 70 if entry_trigger else 50
-    sentiment_score = 15  # Placeholder for NLP logic
-    expert_score = 15     # Placeholder for analyst consensus logic
-    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
-    st.write(f"Confidence Level: **{overall_confidence}/100**")
-    st.progress(overall_confidence)
+    # === Journaling Module ===
+    st.subheader("📝 Trade Journal")
+    note = st.text_area("Add notes or rationale for this analysis:")
 
-    # === Simulated Backtest ===
-    st.subheader("🔁 Simulated Backtest (Last 30 Bars)")
-    recent = df[-30:]
-    trades, in_trade, entry_price = [], False, 0
-
-    for i in range(len(recent)):
-        row = recent.iloc[i]
-        cond_entry = row["Close"] < row["BB_low"] and row["EMA21"] > row["EMA50"] > row["EMA200"] and row["MACD_diff"] > 0
-        cond_exit = row["RSI"] > 85 and row["MACD_diff"] < 0
-
-        if cond_entry and not in_trade:
-            entry_price = row["Open"]
-            in_trade = True
-        elif cond_exit and in_trade:
-            exit_price = row["Open"]
-            trades.append(exit_price - entry_price)
-            in_trade = False
-
-    if trades:
-        win_rate = round(100 * len([t for t in trades if t > 0]) / len(trades), 2)
-        avg_pl = round(np.mean(trades), 2)
-        st.write(f"Trades: {len(trades)} | Win Rate: {win_rate}% | Avg P/L: ${avg_pl}")
-    else:
-        st.write("No trades triggered in last 30 bars.")
-
-    # === Indicator Glossary ===
-    with st.expander("📘 Indicator Glossary & Strategy Guide"):
-        st.markdown("""
-        - **RSI (Relative Strength Index)**: Momentum oscillator.  
-          *Ideal:*""")                        
+    if st.button("Log Analysis"):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        journal_entry = {
+            "Timestamp": timestamp,
+            "Ticker": ticker.upper(),
+            "Confidence": overall_confidence,
+            "Entry Trigger": entry_trigger,
+            "Exit Trigger": exit_trigger,
+            "Stop Loss": stop_loss,
+            "Notes": note
+        }
+        log_df = pd.DataFrame([journal_entry])
+        if os.path.exists("journal.csv"):
+            log_df.to_csv("journal.csv", mode="a", header=False, index=False)
+        else:
+            log_df.to_csv("journal.csv", index=False)
+        st.success("✅ Trade analysis saved to journal")
