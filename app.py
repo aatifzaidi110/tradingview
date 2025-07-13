@@ -87,6 +87,16 @@ if ticker:
     st.write(f"- EMA Stack: 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} {status(bull_ema_stack)}")
     st.write(f"- ATR: {round(last['ATR'],2)} → Breakout: {status(atr_breakout)}")
     st.write(f"- Volume: {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} {status(volume_spike)}")
+    
+     # === Overall Confidence Score ===
+    st.subheader("🧠 Overall Confidence Score")
+    technical_score = 70 if entry_trigger else 50
+    sentiment_score = 15  # Placeholder for NLP logic
+    expert_score = 15     # Placeholder for analyst consensus logic
+    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
+    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.progress(overall_confidence)
+
 
     # === Strategy Logic ===
     st.subheader("🎯 Strategy Logic")
