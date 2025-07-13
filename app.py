@@ -69,6 +69,29 @@ if ticker:
 
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
+    
+     # === Chart Snapshot ===
+    st.subheader("🖼️ Chart Snapshot")
+    chart_path = "chart.png"
+    mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
+    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+
+with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
+    st.markdown("""
+    - **Scalp Trading** → Use 1-min or 5-min charts for precision and quick reactions  
+    - **Day Trading** → 15-min to 1-hour for intraday pattern visibility  
+    - **Swing Trading** → 1-day chart helps confirm trend setups across multiple sessions  
+    - **Position Trades / Investing** → Weekly charts for trend strength & macro context  
+    """)
+
+ # === Overall Confidence Score ===
+    st.subheader("🧠 Overall Confidence Score")
+    technical_score = 70 if entry_trigger else 50
+    sentiment_score = 15
+    expert_score = 15
+    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
+    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.progress(overall_confidence)
 
     # === Technical Table ===
     st.subheader("📊 Technical Indicator Breakdown")
@@ -82,22 +105,7 @@ if ticker:
 | **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Interest. Ideal: Volume > 1.5× 50-day average                          | {color_status(volume_spike)} |
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Volatility zone. Ideal: Entry if price below lower band               | {color_status(price_below_bb)} |
 """)
-
-    # === Chart Snapshot ===
-    st.subheader("🖼️ Chart Snapshot")
-    chart_path = "chart.png"
-    mpf.plot(df[-60:], type='candle', mav=(21,50,200), volume=True, style='yahoo', savefig=chart_path)
-    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
-
-    # === Overall Confidence Score ===
-    st.subheader("🧠 Overall Confidence Score")
-    technical_score = 70 if entry_trigger else 50
-    sentiment_score = 15
-    expert_score = 15
-    overall_confidence = round(technical_score + sentiment_score + expert_score, 2)
-    st.write(f"Confidence Level: **{overall_confidence}/100**")
-    st.progress(overall_confidence)
-
+  
     # === Indicator Glossary ===
     with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
