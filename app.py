@@ -46,6 +46,24 @@ if ticker:
     df["Vol_Avg"] = df["Volume"].rolling(50).mean()
 
     last = df.iloc[-1]
+    
+# === Technical Analysis Table ===
+st.subheader("📊 Technical Indicator Breakdown")
+
+def color_status(flag):
+    return "🟢 Green" if flag else "🔴 Red"
+
+st.markdown(f"""
+| **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                               | **Status** |
+|-------------------|--------------------------|------------------------------------------------------------------------|------------|
+| **RSI**           | {last['RSI']:.2f}         | Momentum. Ideal: <30 for entry, >85 signals overbought                | {color_status(rsi_entry and last['RSI'] < 85)} |
+| **MACD Diff**     | {last['MACD_diff']:.2f}   | Trend momentum. Ideal: >0 confirms bullish crossover                   | {color_status(macd_bullish)} |
+| **EMA Stack**     | 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} | Trend strength. Ideal: EMA21 > EMA50 > EMA200                          | {color_status(bull_ema_stack)} |
+| **ATR Breakout**  | {round(last['ATR'],2)}    | Volatility. Ideal: Price > Prev Close + ATR                            | {color_status(atr_breakout)} |
+| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Interest. Ideal: Volume > 1.5× 50-day average                          | {color_status(volume_spike)} |
+| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Volatility zone. Ideal: Entry if price below lower band               | {color_status(price_below_bb)} |
+""")
+
 
     # === Technical Passes ===
     bull_ema_stack = last["EMA21"] > last["EMA50"] > last["EMA200"]
