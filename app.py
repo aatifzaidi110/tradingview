@@ -17,6 +17,9 @@ ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 def status(flag):
     return "✅" if flag else "❌"
 
+def color_status(flag):
+    return "🟢 Green" if flag else "🔴 Red"
+
 # === Data Fetching ===
 def get_data(symbol):
     stock = yf.Ticker(symbol)
@@ -46,24 +49,6 @@ if ticker:
     df["Vol_Avg"] = df["Volume"].rolling(50).mean()
 
     last = df.iloc[-1]
-    
-# === Technical Analysis Table ===
-st.subheader("📊 Technical Indicator Breakdown")
-
-def color_status(flag):
-    return "🟢 Green" if flag else "🔴 Red"
-
-st.markdown(f"""
-| **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                               | **Status** |
-|-------------------|--------------------------|------------------------------------------------------------------------|------------|
-| **RSI**           | {last['RSI']:.2f}         | Momentum. Ideal: <30 for entry, >85 signals overbought                | {color_status(rsi_entry and last['RSI'] < 85)} |
-| **MACD Diff**     | {last['MACD_diff']:.2f}   | Trend momentum. Ideal: >0 confirms bullish crossover                   | {color_status(macd_bullish)} |
-| **EMA Stack**     | 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} | Trend strength. Ideal: EMA21 > EMA50 > EMA200                          | {color_status(bull_ema_stack)} |
-| **ATR Breakout**  | {round(last['ATR'],2)}    | Volatility. Ideal: Price > Prev Close + ATR                            | {color_status(atr_breakout)} |
-| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Interest. Ideal: Volume > 1.5× 50-day average                          | {color_status(volume_spike)} |
-| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Volatility zone. Ideal: Entry if price below lower band               | {color_status(price_below_bb)} |
-""")
-
 
     # === Technical Passes ===
     bull_ema_stack = last["EMA21"] > last["EMA50"] > last["EMA200"]
@@ -85,6 +70,19 @@ st.markdown(f"""
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
 
+    # === Technical Table ===
+    st.subheader("📊 Technical Indicator Breakdown")
+    st.markdown(f"""
+| **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                               | **Status** |
+|-------------------|--------------------------|------------------------------------------------------------------------|------------|
+| **RSI**           | {last['RSI']:.2f}         | Momentum. Ideal: <30 for entry, >85 signals overbought                | {color_status(rsi_entry and last['RSI'] < 85)} |
+| **MACD Diff**     | {last['MACD_diff']:.2f}   | Trend momentum. Ideal: >0 confirms bullish crossover                   | {color_status(macd_bullish)} |
+| **EMA Stack**     | 21>{round(last['EMA21'],2)} > 50>{round(last['EMA50'],2)} > 200>{round(last['EMA200'],2)} | Trend strength. Ideal: EMA21 > EMA50 > EMA200                          | {color_status(bull_ema_stack)} |
+| **ATR Breakout**  | {round(last['ATR'],2)}    | Volatility. Ideal: Price > Prev Close + ATR                            | {color_status(atr_breakout)} |
+| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Interest. Ideal: Volume > 1.5× 50-day average                          | {color_status(volume_spike)} |
+| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Volatility zone. Ideal: Entry if price below lower band               | {color_status(price_below_bb)} |
+""")
+
     # === Chart Snapshot ===
     st.subheader("🖼️ Chart Snapshot")
     chart_path = "chart.png"
@@ -103,18 +101,18 @@ st.markdown(f"""
     # === Indicator Glossary ===
     with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
-        - **RSI (Relative Strength Index)**: Momentum oscillator.  
-          - *Ideal:* <30 for entry, >85 for exit
-        - **MACD**: Trend confirmation.  
-          - *Ideal:* Positive MACD diff indicates bullish crossover
-        - **EMA Stack (21/50/200)**: Trend strength.  
-          - *Ideal:* EMA21 > EMA50 > EMA200 = strong bullish alignment
-        - **ATR (Average True Range)**: Measures volatility.  
-          - *Ideal:* Price movement beyond ATR suggests breakout
-        - **Bollinger Bands**: Identifies volatility zones.  
-          - *Ideal:* Price near or below lower band may signal bounce
-        - **Volume Spike**: Validates breakout.  
-          - *Ideal:* Volume > 1.5× average confirms interest
+- **RSI (Relative Strength Index)**: Momentum oscillator.  
+  - *Ideal:* <30 for entry, >85 for exit  
+- **MACD**: Trend confirmation.  
+  - *Ideal:* MACD diff > 0 indicates bullish crossover  
+- **EMA Stack**: Trend strength.  
+  - *Ideal:* EMA21 > EMA50 > EMA200 = bullish alignment  
+- **ATR (Average True Range)**: Measures volatility.  
+  - *Ideal:* Price movement beyond ATR suggests breakout  
+- **Bollinger Bands**: Volatility zones.  
+  - *Ideal:* Price near or below lower band may signal bounce  
+- **Volume Spike**: Breakout validation.  
+  - *Ideal:* Volume > 1.5× 50-day average  
         """)
 
     # === Strategy Logic ===
@@ -160,12 +158,3 @@ st.markdown(f"""
             "Confidence": overall_confidence,
             "Entry Trigger": entry_trigger,
             "Exit Trigger": exit_trigger,
-            "Stop Loss": stop_loss,
-            "Notes": note
-        }
-        log_df = pd.DataFrame([journal_entry])
-        if os.path.exists("journal.csv"):
-            log_df.to_csv("journal.csv", mode="a", header=False, index=False)
-        else:
-            log_df.to_csv("journal.csv", index=False)
-        st.success("✅ Trade analysis saved to journal")
