@@ -110,7 +110,20 @@ if ticker:
 - **Expert Score:** {expert_score}/100  
 - ➡️ **Overall Confidence:** **{overall_confidence}/100**
 """)
+#=====Confidence Breakdown Table=====
     st.progress(overall_confidence / 100)
+    
+    st.markdown("### 🧮 Confidence Scoring Table")
+st.markdown(f"""
+| **Component**       | **Weight (%)** | **Raw Score** | **Contribution to Total** |
+|---------------------|----------------|---------------|----------------------------|
+| **Technical Score** | 60%            | {technical_score}/100 | {0.6 * technical_score:.1f} |
+| **Sentiment Score** | 20%            | {sentiment_score}/100 | {0.2 * sentiment_score:.1f} |
+| **Expert Score**    | 20%            | {expert_score}/100 | {0.2 * expert_score:.1f} |
+|                     |                |               |                            |
+| **➡️ Overall Confidence** |                |               | **{overall_confidence}/100** |
+""")
+
 
     # === Technical Indicator Table with Full Descriptions
     st.subheader("📊 Technical Indicator Breakdown")
