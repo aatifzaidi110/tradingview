@@ -125,18 +125,18 @@ if ticker:
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
 """)
 
-    # === Timeframe Selector (Disabled)
-    st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
-    st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
+  # === Timeframe Selector
+st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
+st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
 
-   timeframe = st.radio("Choose your trading style:", [
+timeframe = st.radio("Choose your trading style:", [
     "Swing Trading (1D)",
     "Day Trading (1H)",
     "Scalp Trading (5Min)",
     "Position Trading (1W)"
-    ])
+])
 
-# === Strategy Tagging ===
+# === Strategy Tagging
 strategy_map = {
     "Swing Trading (1D)": "Swing Trade",
     "Day Trading (1H)": "Day Trade",
@@ -146,7 +146,7 @@ strategy_map = {
 selected_strategy = strategy_map.get(timeframe, "Unknown")
 st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
 
-# === Adaptive Recommendation Based on Strategy
+# === Adaptive Recommendation
 st.subheader("🎯 Strategy Recommendation")
 
 if selected_strategy == "Scalp Trade":
