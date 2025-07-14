@@ -175,3 +175,4 @@ if ticker:
         if os.path.exists("journal.csv"):
             log_df.to_csv("journal.csv", mode="a", header=False, index=False)
         else:
+            st.warning("⏳ No trades triggered in last 30 bars.")
