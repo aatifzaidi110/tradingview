@@ -83,7 +83,7 @@ overall_confidence = calculate_confidence(technical_score, sentiment_score, expe
 	
 stop_loss = round(price - last["ATR"], 2)
 support = df["Low"].rolling(20).min().iloc[-1]
-   resistance = df["High"].rolling(20).max().iloc[-1]
+resistance = df["High"].rolling(20).max().iloc[-1]
 	
 # === Overview Panel ===
     st.subheader(f"📌 {ticker.upper()} Overview")
