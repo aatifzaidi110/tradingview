@@ -157,11 +157,11 @@ def backtest_signals(
     for i in range(200, len(df_historical) - 5):
         row = df_historical.iloc[i]
         
-        # Entry signals
+        # Entry signals - properly formatted conditions
         entry_condition = (
-            (30 < row["RSI"] < 70) and
-            (row["MACD_diff"] > 0) and
-            (row["EMA21"] > row["EMA50"] > row["EMA200"]) and
+            (30 < row["RSI"] < 70) and 
+            (row["MACD_diff"] > 0) and 
+            (row["EMA21"] > row["EMA50"] > row["EMA200"]) and 
             (row["Close"] > row["VWAP"])
         )
         
@@ -172,7 +172,7 @@ def backtest_signals(
             take_profit = entry_price + row["ATR"] * reward_multiplier
             
             # Simulate trade over next 5 periods
-            for j in range(i+1, min(i+6, len(df_historical)):  # Fixed line
+            for j in range(i+1, min(i+6, len(df_historical))):  # Properly closed parentheses
                 future_row = df_historical.iloc[j]
                 low_price = future_row["Low"] * (1 - slippage_percent/100)
                 high_price = future_row["High"] * (1 + slippage_percent/100)
