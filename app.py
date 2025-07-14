@@ -134,7 +134,7 @@ if ticker:
     "Day Trading (1H)",
     "Scalp Trading (5Min)",
     "Position Trading (1W)"
-])
+    ])
 
 # === Strategy Tagging ===
 strategy_map = {
