@@ -1,3 +1,4 @@
+# app.py — updated with rate limit protection
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -7,20 +8,14 @@ import mplfinance as mpf
 import datetime
 import os
 
-# === App Setup ===
 st.set_page_config(page_title="Aatif's Swing Dashboard", layout="centered")
 st.title("📊 Aatif's Swing Trade Analyzer")
 
-# === Ticker Input ===
 ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 
-def status(flag):
-    return "✅" if flag else "❌"
+def status(flag): return "✅" if flag else "❌"
+def color_status(flag): return "🟢 Green" if flag else "🔴 Red"
 
-def color_status(flag):
-    return "🟢 Green" if flag else "🔴 Red"
-
-# === Data Fetching ===
 def get_data(symbol):
     stock = yf.Ticker(symbol)
     hist = stock.history(period="6mo")
@@ -33,7 +28,12 @@ def get_data(symbol):
 
 # === Dashboard Logic ===
 if ticker:
-    hist, info, price, previous_close, earnings, dividend = get_data(ticker)
+    try:
+        hist, info, price, previous_close, earnings, dividend = get_data(ticker)
+    except Exception as e:
+        st.error("⚠️ Yahoo Finance rate limit reached. Please wait a few minutes and try again.")
+        st.stop()
+
     df = hist.copy()
 
     # === Indicators ===
@@ -47,7 +47,6 @@ if ticker:
     df["MACD_diff"] = ta.trend.macd_diff(df["Close"])
     df["ATR"] = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"]).average_true_range()
     df["Vol_Avg"] = df["Volume"].rolling(50).mean()
-
     last = df.iloc[-1]
 
     # === Technical Signals ===
@@ -60,25 +59,11 @@ if ticker:
         "BB": price < last["BB_low"]
     }
 
-    weights = {
-        "RSI": 20,
-        "MACD": 20,
-        "EMA": 15,
-        "ATR": 15,
-        "Volume": 15,
-        "BB": 15
-    }
-
-    technical_score = sum([weights[key] for key in signals if signals[key]])
-    sentiment_score = 10  # Placeholder
-    expert_score = 10     # Placeholder
-
-    overall_confidence = round(
-        0.6 * technical_score +
-        0.2 * sentiment_score +
-        0.2 * expert_score,
-        2
-    )
+    weights = {"RSI": 20, "MACD": 20, "EMA": 15, "ATR": 15, "Volume": 15, "BB": 15}
+    technical_score = sum([weights[k] for k in signals if signals[k]])
+    sentiment_score = 10
+    expert_score = 10
+    overall_confidence = round(0.6 * technical_score + 0.2 * sentiment_score + 0.2 * expert_score, 2)
 
     stop_loss = round(price - last["ATR"], 2)
     support = df["Low"].rolling(20).min().iloc[-1]
@@ -98,23 +83,21 @@ if ticker:
         "Scalp Trading (5Min)",
         "Position Trading (1W)"
     ])
-
     tf_settings = {
         "Swing Trading (1D)": {"interval": "1d", "period": "6mo"},
         "Day Trading (1H)": {"interval": "1h", "period": "5d"},
         "Scalp Trading (5Min)": {"interval": "5m", "period": "1d"},
         "Position Trading (1W)": {"interval": "1wk", "period": "1y"}
     }
-
     selected = tf_settings[timeframe]
-    intraday = yf.download(ticker, interval=selected["interval"], period=selected["period"])
-    intraday = intraday.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
-    intraday.index.name = "Date"
-
-    # === Dynamic Chart Snapshot ===
-    chart_path = "chart.png"
-    mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
-    st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
+    try:
+        intraday = yf.download(ticker, interval=selected["interval"], period=selected["period"])
+        intraday.index.name = "Date"
+        intraday = intraday.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
+        mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
+        st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
+    except Exception as e:
+        st.warning("📉 Unable to load intraday chart. Rate limit or data issue.")
 
     # === Recommended Timeframes ===
     with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
@@ -143,18 +126,18 @@ if ticker:
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Entry zone. Ideal: Bounce near lower band                         | {color_status(signals["BB"])} |
 """)
 
-    # === Indicator Glossary ===
+    # === Glossary
     with st.expander("📘 Indicator Glossary & Strategy Guide"):
         st.markdown("""
-- **RSI (Relative Strength Index)**: Momentum indicator  
-- **MACD Diff**: Trend momentum signal  
-- **EMA Stack**: Measures trend strength  
-- **ATR (Average True Range)**: Shows volatility boundaries  
-- **Bollinger Bands**: Entry zone indicators  
-- **Volume Spike**: Validates interest behind breakout  
+- **RSI**: Momentum oscillator  
+- **MACD Diff**: Trend momentum confirmation  
+- **EMA Stack**: Moving average trend strength  
+- **ATR**: Volatility measurement  
+- **Bollinger Bands**: Volatility envelope  
+- **Volume Spike**: Confirms breakout interest  
         """)
 
-    # === Strategy Recommendations ===
+    # === Strategy
     st.subheader("🎯 Strategy Recommendation")
     if technical_score >= 80:
         st.success("✅ Entry Signal Met — High Conviction")
@@ -164,7 +147,4 @@ if ticker:
     else:
         st.warning("🚫 Weak Signal — Avoid or Monitor")
 
-    # === Support / Resistance ===
-    st.subheader("📈 Support & Resistance")
-    st.write(f"- Support: ${support:.2f}")
-    st.write(f"- Resistance: ${resistance:.2f}")
+    st
