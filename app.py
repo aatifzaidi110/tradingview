@@ -297,4 +297,3 @@ else:
 |                     |                |               |                  |
 | **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
-
