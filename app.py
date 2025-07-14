@@ -277,7 +277,8 @@ def backtest_signals(df_historical, atr_multiplier=1.0, reward_multiplier=2.0, s
             "RSI": (row["RSI"] < 30) or (row["RSI"] > 70),
             "MACD": row["MACD_diff"] > 0,
             "EMA": row["EMA21"] > row["EMA50"] > row["EMA200"],
-            "ATR": row["Close"] > row["Close"].shift(1) + row["ATR"] * 0.5 if i > 0 else False, # Compare with previous close
+            # FIX APPLIED HERE: Access previous close from df_historical
+            "ATR": row["Close"] > df_historical.iloc[i-1]["Close"] + row["ATR"] * 0.5 if i > 0 else False,
             "Volume": row["Volume"] > row["Vol_Avg"] * 1.5,
             "BB": (row["Close"] < row["BB_low"] and row["RSI"] < 35)
         }
