@@ -40,8 +40,10 @@ if ticker:
         hist, info, price, previous_close, earnings, dividend = get_data(ticker)
     except Exception:
         st.error("⚠️ Yahoo Finance rate limit reached. Please wait a few minutes and try again.")
-        st.button("🔄 Retry", on_click=st.experimental_rerun)
+        if st.button("🔄 Retry"):
+            st.experimental_rerun()
         st.stop()
+
 
     df = hist.copy()
 
