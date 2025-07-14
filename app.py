@@ -166,4 +166,4 @@ if ticker:
     # === Support / Resistance ===
     st.subheader("📈 Support & Resistance")
     st.write(f"- Support: ${support:.2f}")
-    st.write(f"- Resistance:
+    st.write(f"- Resistance: ${resistance:.2f}")
