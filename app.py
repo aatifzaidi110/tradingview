@@ -3,6 +3,8 @@ import yfinance as yf
 import pandas as pd
 import ta
 import mplfinance as mpf
+import matplotlib.pyplot as plt
+
 
 st.set_page_config(page_title="Aatif's Swing Dashboard", layout="centered")
 st.title("📊 Aatif's Swing Trade Analyzer")
@@ -74,6 +76,7 @@ if ticker:
     sentiment_score = 10
     expert_score = 10
     weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+  # Calculate final confidence score
     overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
 
 
@@ -140,7 +143,21 @@ if ticker:
 |                     |                |               |                  |
 | **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
-  
+# === Confidence Pie Chart ===
+st.subheader("📊 Confidence Weight Distribution")
+
+labels = ["Technical", "Sentiment", "Expert"]
+raw_scores = [technical_score, sentiment_score, expert_score]
+weights_list = [weights["technical"], weights["sentiment"], weights["expert"]]
+contributions = [round(raw_scores[i] * weights_list[i], 1) for i in range(3)]
+
+fig, ax = plt.subplots()
+ax.pie(contributions, labels=[f"{labels[i]} ({contributions[i]})" for i in range(3)],
+       autopct="%1.1f%%", startangle=90, colors=["#4CAF50", "#2196F3", "#FFC107"])
+ax.axis("equal")
+
+st.pyplot(fig)
+
 #=======Backtest function========
 def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
     trades = []
