@@ -81,8 +81,8 @@ if ticker:
 #=== Calculate final confidence score==
 overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
 	
-   stop_loss = round(price - last["ATR"], 2)
-   support = df["Low"].rolling(20).min().iloc[-1]
+stop_loss = round(price - last["ATR"], 2)
+support = df["Low"].rolling(20).min().iloc[-1]
    resistance = df["High"].rolling(20).max().iloc[-1]
 	
 # === Overview Panel ===
