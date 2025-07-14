@@ -70,21 +70,7 @@ if ticker:
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
     
-    #====Sentiment & Expert Panel===
-    st.subheader("🧠 Sentiment & Expert Analysis")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Sentiment Score:** {sentiment_score}/100")
-        st.markdown(f"- [📰 Latest News](https://news.google.com/search?q={ticker}+stock)")
-        st.markdown(f"- [🗂 Finviz Headlines](https://finviz.com/quote.ashx?t={ticker})")
-
-    with col2:
-        st.write(f"**Expert Score:** {expert_score}/100")
-        st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
-        st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
-
-    # === Trade Overview Panel ===
+      # === Trade Overview Panel ===
     st.subheader(f"📌 {ticker.upper()} Overview")
     col1, col2 = st.columns(2)
     with col1:
@@ -100,6 +86,19 @@ if ticker:
         st.markdown(f"- [📊 Finviz](https://finviz.com/quote.ashx?t={ticker})")
         st.markdown(f"- [📈 Barchart](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
+  #====Sentiment & Expert Panel===
+    st.subheader("🧠 Sentiment & Expert Analysis")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Sentiment Score:** {sentiment_score}/100")
+        st.markdown(f"- [📰 Latest News](https://news.google.com/search?q={ticker}+stock)")
+        st.markdown(f"- [🗂 Finviz Headlines](https://finviz.com/quote.ashx?t={ticker})")
+
+    with col2:
+        st.write(f"**Expert Score:** {expert_score}/100")
+        st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
+        st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
     # === Chart Snapshot
     st.subheader("🖼️ Chart Snapshot")
