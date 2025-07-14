@@ -129,4 +129,49 @@ if ticker:
     st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
     st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
 
-    timeframe = st.radio("Choose your trading style:", [
+   timeframe = st.radio("Choose your trading style:", [
+    "Swing Trading (1D)",
+    "Day Trading (1H)",
+    "Scalp Trading (5Min)",
+    "Position Trading (1W)"
+])
+
+# === Strategy Tagging ===
+strategy_map = {
+    "Swing Trading (1D)": "Swing Trade",
+    "Day Trading (1H)": "Day Trade",
+    "Scalp Trading (5Min)": "Scalp Trade",
+    "Position Trading (1W)": "Position Trade"
+}
+selected_strategy = strategy_map.get(timeframe, "Unknown")
+st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
+
+# === Adaptive Recommendation Based on Strategy
+st.subheader("🎯 Strategy Recommendation")
+
+if selected_strategy == "Scalp Trade":
+    if technical_score >= 85:
+        st.success("⚡ Scalp Signal Met — Quick Entry Suggested")
+        st.write(f"Suggested Stop Loss: ${stop_loss}")
+    else:
+        st.warning("🚫 Weak Momentum — Not Ideal for Scalping")
+elif selected_strategy == "Day Trade":
+    if technical_score >= 80:
+        st.success("📈 Day Trade Setup Found — Confirm with Intraday Flow")
+        st.write(f"Suggested Stop Loss: ${stop_loss}")
+    else:
+        st.info("⏳ Wait for Intraday Confirmation or Volume Spike")
+elif selected_strategy == "Swing Trade":
+    if technical_score >= 75:
+        st.success("🌀 Swing Trade Opportunity — Monitor Entry Zone")
+        st.write(f"Suggested Stop Loss: ${stop_loss}")
+    else:
+        st.warning("⚠️ Setup Weak — Consider Watching Until More Signals Fire")
+elif selected_strategy == "Position Trade":
+    if overall_confidence >= 70:
+        st.success("📊 Strong Long-Term Outlook — Position Entry Viable")
+        st.write(f"Use Weekly Support: ${support:.2f}")
+    else:
+        st.info("💤 Not Enough Alignment for Long-Term Entry")
+else:
+    st.warning("❔ Unknown strategy type — cannot generate recommendation.")
