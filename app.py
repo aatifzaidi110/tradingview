@@ -115,6 +115,10 @@ if ticker:
     chart_path = "chart.png"
     mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+    # === Chart Timeframe Selector (Temporarily Disabled) ===
+    st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
+    st.info("Intraday charting is temporarily disabled to avoid rate limit errors. Full multi-timeframe view will return soon.")
+
 
     # === Chart Timeframe Selector
     st.subheader("🕰️ Select Chart Timeframe")
@@ -130,10 +134,10 @@ if ticker:
     }
 
     try:
-        selected = tf_settings[timeframe]
-        intraday = fetch_intraday(ticker, selected["interval"], selected["period"])
-        mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
-        st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
+       ## selected = tf_settings[timeframe]
+       ## intraday = fetch_intraday(ticker, selected["interval"], selected["period"])
+       ## mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
+       ## st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
     except Exception:
         st.warning("❌ Unable to load intraday chart. Rate limit or data issue.")
         if st.button("🔄 Retry Chart"):
