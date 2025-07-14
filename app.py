@@ -86,7 +86,14 @@ if ticker:
         st.markdown(f"- [📊 Finviz](https://finviz.com/quote.ashx?t={ticker})")
         st.markdown(f"- [📈 Barchart](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
-  #====Sentiment & Expert Panel===
+ 
+ # === Chart Snapshot
+    st.subheader("🖼️ Chart Snapshot")
+    chart_path = "chart.png"
+    mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
+    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+
+ #====Sentiment & Expert Panel===
     st.subheader("🧠 Sentiment & Expert Analysis")
 
     col1, col2 = st.columns(2)
@@ -100,31 +107,12 @@ if ticker:
         st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
         st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
-    # === Chart Snapshot
-    st.subheader("🖼️ Chart Snapshot")
-    chart_path = "chart.png"
-    mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
-    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
-
-    # === Timeframe Selector (Disabled)
-    st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
-    st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
-
-    # Optional: Keep style selector
-    timeframe = st.radio("Choose your trading style:", [
-        "Swing Trading (1D)", "Day Trading (1H)", "Scalp Trading (5Min)", "Position Trading (1W)"
-    ])
-
-    # === Strategy Expander
-    with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
-        st.markdown("""
-        - **Scalp Trading** → 1-min or 5-min for precision  
-        - **Day Trading** → 15-min to 1-hour for intraday setups  
-        - **Swing Trading** → 1-day charts for multi-session trends  
-        - **Position Trades / Investing** → Weekly charts for macro view  
-        """)
-
     # === Confidence Summary
+    st.subheader("🧠 Overall Confidence Score")
+    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.progress(overall_confidence / 100)
+
+ # === Confidence Summary
     st.subheader("🧠 Overall Confidence Score")
     st.write(f"Confidence Level: **{overall_confidence}/100**")
     st.progress(overall_confidence / 100)
@@ -142,7 +130,7 @@ if ticker:
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Bounce zone below lower band                   | {color_status(signals["BB"])} |
 """)
 
-    # === Strategy Recommendation
+       # === Strategy Recommendation
     st.subheader("🎯 Strategy Recommendation")
     if technical_score >= 80:
         st.success("✅ Entry Signal Met — High Conviction")
@@ -151,3 +139,20 @@ if ticker:
         st.info("⏳ Watchlist Setup — Wait for Confirmation")
     else:
         st.warning("🚫 Weak Signal — Avoid or Monitor")
+ # === Timeframe Selector (Disabled)
+    st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
+    st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
+
+    # Optional: Keep style selector
+    timeframe = st.radio("Choose your trading style:", [
+        "Swing Trading (1D)", "Day Trading (1H)", "Scalp Trading (5Min)", "Position Trading (1W)"
+    ])
+
+    # === Strategy Expander
+    with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
+        st.markdown("""
+        - **Scalp Trading** → 1-min or 5-min for precision  
+        - **Day Trading** → 15-min to 1-hour for intraday setups  
+        - **Swing Trading** → 1-day charts for multi-session trends  
+        - **Position Trades / Investing** → Weekly charts for macro view  
+        """)
