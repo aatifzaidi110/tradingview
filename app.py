@@ -108,6 +108,7 @@ if ticker:
 
     selected = tf_settings[timeframe]
     intraday = yf.download(ticker, interval=selected["interval"], period=selected["period"])
+    intraday = intraday.dropna(subset=["Open", "High", "Low", "Close", "Volume"])
     intraday.index.name = "Date"
 
     # === Dynamic Chart Snapshot ===
