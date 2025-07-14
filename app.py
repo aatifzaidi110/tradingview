@@ -116,27 +116,7 @@ if ticker:
         st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
         st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
-    # === Confidence Summary
-    st.subheader("🧮 Confidence Breakdown")
-    st.write(f"""
-- **Technical Score:** {technical_score}/100  
-- **Sentiment Score:** {sentiment_score}/100  
-- **Expert Score:** {expert_score}/100  
-- ➡️ **Overall Confidence:** **{overall_confidence}/100**
-""")
-#=====Confidence Breakdown Table=====
-    st.markdown("### 🧮 Confidence Scoring Table")
-    st.markdown(f"""
-| **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
-|---------------------|----------------|---------------|------------------|
-| **Technical Score** | {weights['technical']*100:.0f}%            | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
-| **Sentiment Score** | {weights['sentiment']*100:.0f}%            | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
-| **Expert Score**    | {weights['expert']*100:.0f}%            | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
-|                     |                |               |                  |
-| **➡️ Overall Confidence** |                |               | **{overall_confidence}/100** |
-""")
-
-
+    
     # === Technical Indicator Table with Full Descriptions
     st.subheader("📊 Technical Indicator Breakdown")
     st.markdown(f"""
@@ -148,6 +128,17 @@ if ticker:
 | **ATR Breakout**  | {last['ATR']:.2f}         | Gauges volatility. Ideal: price > previous close + ATR for a breakout.                                    | {color_status(signals["ATR"])} |
 | **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Highlights interest. Ideal: volume > 1.5× average for strong moves.      | {color_status(signals["Volume"])} |
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
+""")
+#=====Confidence Breakdown Table=====
+    st.markdown("### 🧮 Confidence Scoring Table")
+    st.markdown(f"""
+| **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
+|---------------------|----------------|---------------|------------------|
+| **Technical Score** | {weights['technical']*100:.0f}%            | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
+| **Sentiment Score** | {weights['sentiment']*100:.0f}%            | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
+| **Expert Score**    | {weights['expert']*100:.0f}%            | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
+|                     |                |               |                  |
+| **➡️ Overall Confidence** |                |               | **{overall_confidence}/100** |
 """)
 #=======Backtest function========
 def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
