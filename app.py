@@ -1,3 +1,4 @@
+# === Streamlit Imports ===
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -5,7 +6,7 @@ import ta
 import mplfinance as mpf
 import matplotlib.pyplot as plt
 
-
+# === Page Setup ===
 st.set_page_config(page_title="Aatif's Swing Dashboard", layout="centered")
 st.title("📊 Aatif's Swing Trade Analyzer")
 
@@ -16,7 +17,6 @@ ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 def status(flag): return "✅" if flag else "❌"
 def color_status(flag): return "🟢 Green" if flag else "🔴 Red"
 
-#====Calculate Confidenece====
 def calculate_confidence(technical, sentiment, expert, weights=None):
     if weights is None:
         weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
@@ -27,7 +27,6 @@ def calculate_confidence(technical, sentiment, expert, weights=None):
         2
     )
     return score
-
 # === Caching ===
 @st.cache_data(ttl=600)
 def get_data(symbol):
@@ -61,8 +60,8 @@ if ticker:
     df["ATR"] = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"]).average_true_range()
     df["Vol_Avg"] = df["Volume"].rolling(50).mean()
     last = df.iloc[-1]
-
-    # === Signals & Scores ===
+	
+ # === Signals & Scores ===
     signals = {
         "RSI": last["RSI"] < 30 or last["RSI"] > 50,
         "MACD": last["MACD_diff"] > 0,
@@ -71,20 +70,19 @@ if ticker:
         "Volume": last["Volume"] > last["Vol_Avg"] * 1.5,
         "BB": price < last["BB_low"]
     }
-    weights = {"RSI": 20, "MACD": 20, "EMA": 15, "ATR": 15, "Volume": 15, "BB": 15}
-    technical_score = sum([weights[k] for k in signals if signals[k]]) + ml_boost
+    signal_weights = {"RSI": 20, "MACD": 20, "EMA": 15, "ATR": 15, "Volume": 15, "BB": 15}
+    technical_score = sum([signal_weights[k] for k in signals if signals[k]]) + ml_boost
     sentiment_score = 10
     expert_score = 10
-    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
-  # Calculate final confidence score
+	
+#=== Calculate final confidence score==
     overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
-
-
-    stop_loss = round(price - last["ATR"], 2)
+	
+	 stop_loss = round(price - last["ATR"], 2)
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
-
-    # === Overview Panel ===
+	
+# === Overview Panel ===
     st.subheader(f"📌 {ticker.upper()} Overview")
     col1, col2 = st.columns(2)
     with col1:
@@ -101,13 +99,13 @@ if ticker:
         st.markdown(f"- [📈 Barchart](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
 
-    # === Chart Snapshot
+  # === Chart Snapshot
     st.subheader("🖼️ Chart Snapshot")
     chart_path = "chart.png"
     mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
-    # === Sentiment & Expert Panel ===
+  # === Sentiment & Expert Panel ===
     st.subheader("🧠 Sentiment & Expert Analysis")
     col1, col2 = st.columns(2)
     with col1:
@@ -119,8 +117,7 @@ if ticker:
         st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
         st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
-    
-    # === Technical Indicator Table with Full Descriptions
+   # === Technical Indicator Table with Full Descriptions
     st.subheader("📊 Technical Indicator Breakdown")
     st.markdown(f"""
 | **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                                                                 | **Status** |
@@ -133,7 +130,6 @@ if ticker:
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
 | **ML Boost (Bonus)**  | —              | —                 | {ml_boost} |
 
-""")
 #=====Confidence Scoring Table=====
     st.markdown("### 🧮 Confidence Scoring Table")
     st.markdown(f"""
@@ -146,13 +142,11 @@ if ticker:
 | **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
 
-# === ML Boost Logic (Optional Confidence Bump)
-ml_boost = 0
-if last["RSI"] > 50 and price > last["EMA200"]:
-    ml_boost = 10
-
+# === ML Boost Logic (before scoring)
+    ml_boost = 10 if last["RSI"] > 50 and price > last["EMA200"] else 0
+	
 # === Confidence Pie Chart ===
-st.subheader("📊 Confidence Weight Distribution")
+   st.subheader("📊 Confidence Weight Distribution")
 
 labels = ["Technical", "Sentiment", "Expert"]
 raw_scores = [technical_score, sentiment_score, expert_score]
@@ -173,12 +167,11 @@ ax.pie(
 )
 ax.axis("equal")
 st.pyplot(fig)
-
-
-#=======Backtest function========
+		
+# === Backtest Function ===
 def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
     trades = []
-    for i in range(60, len(df) - 5):  # Skip initial buffer
+    for i in range(60, len(df) - 5):
         row = df.iloc[i]
         next_rows = df.iloc[i+1:i+5]
 
@@ -203,12 +196,15 @@ def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
                     result = "Win"
                     break
 
+            boost = 10 if row["RSI"] > 50 and row["Close"] > row["EMA200"] else 0
             trades.append({
                 "Entry": round(entry, 2),
                 "Exit": round(exit, 2),
-                "Result": result
+                "Result": result,
+                "ML Boost": boost
             })
     return trades
+
 
    # === Backtest Summary ===
 trades = backtest_signals(df)
@@ -224,41 +220,36 @@ st.write(f"- 🏆 Win Rate: **{win_rate}%**")
 
 
 
+
   # === Timeframe Selector
-st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
-st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
-
-timeframe = st.radio("Choose your trading style:", [
-    "Swing Trading (1D)",
-    "Day Trading (1H)",
-    "Scalp Trading (5Min)",
-    "Position Trading (1W)"
-])
-
+    timeframe = st.radio("Choose your trading style:", [
+        "Swing Trading (1D)",
+        "Day Trading (1H)",
+        "Scalp Trading (5Min)",
+        "Position Trading (1W)"
+    ])
+	
 # === Strategy Tagging
-strategy_map = {
-    "Swing Trading (1D)": "Swing Trade",
-    "Day Trading (1H)": "Day Trade",
-    "Scalp Trading (5Min)": "Scalp Trade",
-    "Position Trading (1W)": "Position Trade"
-}
-selected_strategy = strategy_map.get(timeframe, "Unknown")
-st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
-
+    strategy_map = {
+        "Swing Trading (1D)": "Swing Trade",
+        "Day Trading (1H)": "Day Trade",
+        "Scalp Trading (5Min)": "Scalp Trade",
+        "Position Trading (1W)": "Position Trade"
+    }
+    selected_strategy = strategy_map.get(timeframe, "Unknown")
+    st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
 # === Dynamic Confidence Weights
-if selected_strategy == "Scalp Trade":
-    weights = {"technical": 0.5, "sentiment": 0.3, "expert": 0.2}
-elif selected_strategy == "Day Trade":
-    weights = {"technical": 0.6, "sentiment": 0.25, "expert": 0.15}
-elif selected_strategy == "Swing Trade":
-    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
-elif selected_strategy == "Position Trade":
-    weights = {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}
-else:
-    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
-
-
-if selected_strategy == "Scalp Trade":
+    if selected_strategy == "Scalp Trade":
+        weights = {"technical": 0.5, "sentiment": 0.3, "expert": 0.2}
+    elif selected_strategy == "Day Trade":
+        weights = {"technical": 0.6, "sentiment": 0.25, "expert": 0.15}
+    elif selected_strategy == "Swing Trade":
+        weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+    elif selected_strategy == "Position Trade":
+        weights = {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}
+    else:
+        weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+ if selected_strategy == "Scalp Trade":
     if technical_score >= 85:
         st.success("⚡ Scalp Signal Met — Quick Entry Suggested")
         st.write(f"Suggested Stop Loss: ${stop_loss}")
@@ -284,25 +275,24 @@ elif selected_strategy == "Position Trade":
         st.info("💤 Not Enough Alignment for Long-Term Entry")
 else:
     st.warning("❔ Unknown strategy type — cannot generate recommendation.")
-#=====Journaling Function =======
 
-if "journal" not in st.session_state:
-    st.session_state["journal"] = []
+    # === Confidence Breakdown ===
+    st.subheader("💡 Confidence Breakdown")
+    st.progress(overall_confidence / 100)
+    st.write(f"✅ Technical Score: {technical_score}/100")
+    st.write(f"🔮 Sentiment Score: {sentiment_score}/100")
+    st.write(f"📚 Expert Score: {expert_score}/100")
+    st.write(f"📈 ML Boost Applied: **{ml_boost}**")
 
-if st.button("📝 Log This Trade Setup"):
-   journal_entry = {
-    "Ticker": ticker.upper(),
-    "Date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-    "Strategy": selected_strategy,
-    "Confidence": overall_confidence,
-    "ML Boost": ml_boost,
-    "Signals Fired": [k for k in signals if signals[k]],
-    "Recommendation": selected_strategy  # You can expand this later
-    }
+    st.markdown("### 🧮 Confidence Scoring Table")
+    st.markdown(f"""
+| **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
+|---------------------|----------------|---------------|------------------|
+| **Technical Score** | {weights['technical']*100:.0f}% | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
+| **Sentiment Score** | {weights['sentiment']*100:.0f}% | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
+| **Expert Score**    | {weights['expert']*100:.0f}%    | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
+|                     |                |               |                  |
+| **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
+""")
 
-    st.session_state["journal"].append(journal_entry)
-    st.success(f"✅ Trade for {ticker.upper()} logged successfully!")
-#==== Journaling View======
-if st.session_state["journal"]:
-    st.subheader("📚 Logged Trade Setups")
-    st.dataframe(pd.DataFrame(st.session_state["journal"]))
+ 
