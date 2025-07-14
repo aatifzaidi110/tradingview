@@ -72,7 +72,7 @@ if ticker:
         "BB": price < last["BB_low"]
     }
     weights = {"RSI": 20, "MACD": 20, "EMA": 15, "ATR": 15, "Volume": 15, "BB": 15}
-    technical_score = sum([weights[k] for k in signals if signals[k]])
+    technical_score = sum([weights[k] for k in signals if signals[k]]) + ml_boost
     sentiment_score = 10
     expert_score = 10
     weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
@@ -131,6 +131,8 @@ if ticker:
 | **ATR Breakout**  | {last['ATR']:.2f}         | Gauges volatility. Ideal: price > previous close + ATR for a breakout.                                    | {color_status(signals["ATR"])} |
 | **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Highlights interest. Ideal: volume > 1.5× average for strong moves.      | {color_status(signals["Volume"])} |
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
+| **ML Boost (Bonus)**  | —              | —                 | {ml_boost} |
+
 """)
 #=====Confidence Scoring Table=====
     st.markdown("### 🧮 Confidence Scoring Table")
@@ -143,6 +145,12 @@ if ticker:
 |                     |                |               |                  |
 | **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
+
+# === ML Boost Logic (Optional Confidence Bump)
+ml_boost = 0
+if last["RSI"] > 50 and price > last["EMA200"]:
+    ml_boost = 10
+
 # === Confidence Pie Chart ===
 st.subheader("📊 Confidence Weight Distribution")
 
@@ -282,14 +290,16 @@ if "journal" not in st.session_state:
     st.session_state["journal"] = []
 
 if st.button("📝 Log This Trade Setup"):
-    journal_entry = {
-        "Ticker": ticker.upper(),
-        "Date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-        "Strategy": selected_strategy,
-        "Confidence": overall_confidence,
-        "Signals Fired": [k for k in signals if signals[k]],
-        "Recommendation": selected_strategy  # could be expanded later
+   journal_entry = {
+    "Ticker": ticker.upper(),
+    "Date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+    "Strategy": selected_strategy,
+    "Confidence": overall_confidence,
+    "ML Boost": ml_boost,
+    "Signals Fired": [k for k in signals if signals[k]],
+    "Recommendation": selected_strategy  # You can expand this later
     }
+
     st.session_state["journal"].append(journal_entry)
     st.success(f"✅ Trade for {ticker.upper()} logged successfully!")
 #==== Journaling View======
