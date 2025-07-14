@@ -86,15 +86,15 @@ support = df["Low"].rolling(20).min().iloc[-1]
 resistance = df["High"].rolling(20).max().iloc[-1]
 	
 # === Overview Panel ===
-   st.subheader(f"📌 {ticker.upper()} Overview")
-   col1, col2 = st.columns(2)
-    with col1:
+st.subheader(f"📌 {ticker.upper()} Overview")
+col1, col2 = st.columns(2)
+with col1:
         st.write(f"**Description:** {info.get('longBusinessSummary', 'N/A')[:300]}...")
         st.write(f"**Current Price:** ${price:.2f}")
         st.write(f"**Previous Close:** ${previous_close:.2f}")
         st.write(f"**Earnings Date:** {earnings}")
         st.write(f"**Dividend Date:** {dividend}")
-    with col2:
+with col2:
         st.write(f"**Support Level:** ${support:.2f}")
         st.write(f"**Resistance Level:** ${resistance:.2f}")
         st.markdown(f"- [📰 Google News](https://news.google.com/search?q={ticker}+stock)")
@@ -103,26 +103,26 @@ resistance = df["High"].rolling(20).max().iloc[-1]
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
 
   # === Chart Snapshot
-   st.subheader("🖼️ Chart Snapshot")
-   chart_path = "chart.png"
-   mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
-   st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+st.subheader("🖼️ Chart Snapshot")
+chart_path = "chart.png"
+mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
+st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
   # === Sentiment & Expert Panel ===
-    st.subheader("🧠 Sentiment & Expert Analysis")
-    col1, col2 = st.columns(2)
-    with col1:
+st.subheader("🧠 Sentiment & Expert Analysis")
+col1, col2 = st.columns(2)
+with col1:
         st.write(f"**Sentiment Score:** {sentiment_score}/100")
         st.markdown(f"- [📰 Latest News](https://news.google.com/search?q={ticker}+stock)")
         st.markdown(f"- [🗂 Finviz Headlines](https://finviz.com/quote.ashx?t={ticker})")
-    with col2:
+with col2:
         st.write(f"**Expert Score:** {expert_score}/100")
         st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
         st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
    # === Technical Indicator Table with Full Descriptions
-    st.subheader("📊 Technical Indicator Breakdown")
-    st.markdown(f"""
+st.subheader("📊 Technical Indicator Breakdown")
+st.markdown(f"""
 | **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                                                                 | **Status** |
 |-------------------|--------------------------|------------------------------------------------------------------------------------------------------------|------------|
 | **RSI**           | {last['RSI']:.2f}         | Measures overbought/oversold momentum. Ideal: <30 = oversold, >70 = overbought.                          | {color_status(signals["RSI"])} |
@@ -298,4 +298,3 @@ else:
 | **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
 
- 
