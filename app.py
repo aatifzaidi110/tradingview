@@ -114,7 +114,7 @@ if ticker:
     st.progress(overall_confidence / 100)
     
     st.markdown("### 🧮 Confidence Scoring Table")
-st.markdown(f"""
+    st.markdown(f"""
 | **Component**       | **Weight (%)** | **Raw Score** | **Contribution to Total** |
 |---------------------|----------------|---------------|----------------------------|
 | **Technical Score** | 60%            | {technical_score}/100 | {0.6 * technical_score:.1f} |
