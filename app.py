@@ -223,3 +223,23 @@ elif selected_strategy == "Position Trade":
         st.info("💤 Not Enough Alignment for Long-Term Entry")
 else:
     st.warning("❔ Unknown strategy type — cannot generate recommendation.")
+#=====Journaling Function =======
+
+if "journal" not in st.session_state:
+    st.session_state["journal"] = []
+
+if st.button("📝 Log This Trade Setup"):
+    journal_entry = {
+        "Ticker": ticker.upper(),
+        "Date": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+        "Strategy": selected_strategy,
+        "Confidence": overall_confidence,
+        "Signals Fired": [k for k in signals if signals[k]],
+        "Recommendation": selected_strategy  # could be expanded later
+    }
+    st.session_state["journal"].append(journal_entry)
+    st.success(f"✅ Trade for {ticker.upper()} logged successfully!")
+#==== Journaling View======
+if st.session_state["journal"]:
+    st.subheader("📚 Logged Trade Setups")
+    st.dataframe(pd.DataFrame(st.session_state["journal"]))
