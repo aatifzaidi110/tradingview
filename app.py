@@ -129,17 +129,18 @@ if ticker:
 | **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Highlights interest. Ideal: volume > 1.5× average for strong moves.      | {color_status(signals["Volume"])} |
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
 """)
-#=====Confidence Breakdown Table=====
+#=====Confidence Scoring Table=====
     st.markdown("### 🧮 Confidence Scoring Table")
     st.markdown(f"""
 | **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
 |---------------------|----------------|---------------|------------------|
-| **Technical Score** | {weights['technical']*100:.0f}%            | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
-| **Sentiment Score** | {weights['sentiment']*100:.0f}%            | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
-| **Expert Score**    | {weights['expert']*100:.0f}%            | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
+| **Technical Score** | {weights['technical']*100:.0f}% | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
+| **Sentiment Score** | {weights['sentiment']*100:.0f}% | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
+| **Expert Score**    | {weights['expert']*100:.0f}%    | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
 |                     |                |               |                  |
-| **➡️ Overall Confidence** |                |               | **{overall_confidence}/100** |
+| **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
 """)
+  
 #=======Backtest function========
 def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
     trades = []
@@ -210,8 +211,18 @@ strategy_map = {
 selected_strategy = strategy_map.get(timeframe, "Unknown")
 st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
 
-# === Adaptive Recommendation
-st.subheader("🎯 Strategy Recommendation")
+# === Dynamic Confidence Weights
+if selected_strategy == "Scalp Trade":
+    weights = {"technical": 0.5, "sentiment": 0.3, "expert": 0.2}
+elif selected_strategy == "Day Trade":
+    weights = {"technical": 0.6, "sentiment": 0.25, "expert": 0.15}
+elif selected_strategy == "Swing Trade":
+    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+elif selected_strategy == "Position Trade":
+    weights = {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}
+else:
+    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+
 
 if selected_strategy == "Scalp Trade":
     if technical_score >= 85:
