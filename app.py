@@ -86,8 +86,8 @@ support = df["Low"].rolling(20).min().iloc[-1]
 resistance = df["High"].rolling(20).max().iloc[-1]
 	
 # === Overview Panel ===
-    st.subheader(f"📌 {ticker.upper()} Overview")
-    col1, col2 = st.columns(2)
+   st.subheader(f"📌 {ticker.upper()} Overview")
+   col1, col2 = st.columns(2)
     with col1:
         st.write(f"**Description:** {info.get('longBusinessSummary', 'N/A')[:300]}...")
         st.write(f"**Current Price:** ${price:.2f}")
@@ -103,10 +103,10 @@ resistance = df["High"].rolling(20).max().iloc[-1]
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
 
   # === Chart Snapshot
-    st.subheader("🖼️ Chart Snapshot")
-    chart_path = "chart.png"
-    mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
-    st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+   st.subheader("🖼️ Chart Snapshot")
+   chart_path = "chart.png"
+   mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
+   st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
   # === Sentiment & Expert Panel ===
     st.subheader("🧠 Sentiment & Expert Analysis")
