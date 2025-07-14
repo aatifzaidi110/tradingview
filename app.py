@@ -288,7 +288,7 @@ else:
     st.write(f"📈 ML Boost Applied: **{ml_boost}**")
 
     st.markdown("### 🧮 Confidence Scoring Table")
- st.markdown(f"""
+st.markdown(f"""
 ### 🧮 Confidence Scoring Table
 
 | **Component**       | **Weight (%)** | **Raw Score**       | **Contribution**          |
