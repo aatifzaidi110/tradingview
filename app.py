@@ -124,6 +124,53 @@ if ticker:
 | **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Highlights interest. Ideal: volume > 1.5× average for strong moves.      | {color_status(signals["Volume"])} |
 | **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
 """)
+#=======Backtest function========
+def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
+    trades = []
+    for i in range(60, len(df) - 5):  # Skip first 60 to allow MA/Vol/ATR window
+        row = df.iloc[i]
+        next_rows = df.iloc[i+1:i+5]  # Simulate max 4-day hold
+
+        # Trigger condition: all three indicators align
+        if (
+            row["RSI"] < 30 or row["RSI"] > 50 and
+            row["MACD_diff"] > 0 and
+            row["EMA21"] > row["EMA50"] > row["EMA200"]
+        ):
+            entry = row["Close"]
+            stop = entry - row["ATR"] * atr_multiplier
+            target = entry + row["ATR"] * reward_multiplier
+            exit = entry  # default if neither hit
+            result = "Neutral"
+
+            for r in next_rows.itertuples():
+                if r.Low < stop:
+                    exit = stop
+                    result = "Loss"
+                    break
+                elif r.High > target:
+                    exit = target
+                    result = "Win"
+                    break
+
+            trades.append({
+                "Entry": round(entry, 2),
+                "Exit": round(exit, 2),
+                "Result": result
+            })
+    return trades
+    # === Backtest Summary ===
+trades = backtest_signals(df)
+wins = sum(1 for t in trades if t["Result"] == "Win")
+losses = sum(1 for t in trades if t["Result"] == "Loss")
+total = len(trades)
+win_rate = round((wins / total) * 100, 2) if total else 0
+
+st.subheader("🧪 Backtest Performance")
+st.write(f"Total Trades Found: **{total}**")
+st.write(f"✅ Wins: {wins}, ❌ Losses: {losses}")
+st.write(f"🏆 Win Rate: **{win_rate}%**")
+
 
   # === Timeframe Selector
 st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
