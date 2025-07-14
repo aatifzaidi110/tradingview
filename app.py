@@ -79,7 +79,7 @@ if ticker:
     expert_score = 10
 	
 #=== Calculate final confidence score==
-   overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
+overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
 	
    stop_loss = round(price - last["ATR"], 2)
    support = df["Low"].rolling(20).min().iloc[-1]
