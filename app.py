@@ -14,6 +14,26 @@ ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 def status(flag): return "✅" if flag else "❌"
 def color_status(flag): return "🟢 Green" if flag else "🔴 Red"
 
+# === Trade Overview Panel ===
+st.subheader(f"📌 {ticker.upper()} Overview")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.write(f"**Description:** {info.get('longBusinessSummary', 'N/A')[:300]}...")
+    st.write(f"**Current Price:** ${price:.2f}")
+    st.write(f"**Previous Close:** ${previous_close:.2f}")
+    st.write(f"**Earnings Date:** {earnings}")
+    st.write(f"**Dividend Date:** {dividend}")
+
+with col2:
+    st.write(f"**Support Level:** ${support:.2f}")
+    st.write(f"**Resistance Level:** ${resistance:.2f}")
+    st.markdown(f"- [📰 Google News]({f'https://news.google.com/search?q={ticker}+stock'})")
+    st.markdown(f"- [📊 Finviz]({f'https://finviz.com/quote.ashx?t={ticker}'})")
+    st.markdown(f"- [📈 Barchart]({f'https://www.barchart.com/stocks/quotes/{ticker}/overview'})")
+    st.markdown(f"- [🎯 TipRanks]({f'https://www.tipranks.com/stocks/{ticker}/forecast'})")
+
+
 # === Caching ===
 @st.cache_data(ttl=600)
 def get_data(symbol):
