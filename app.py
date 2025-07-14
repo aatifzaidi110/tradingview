@@ -14,6 +14,18 @@ ticker = st.text_input("Enter a Ticker Symbol", value="NVDA")
 def status(flag): return "✅" if flag else "❌"
 def color_status(flag): return "🟢 Green" if flag else "🔴 Red"
 
+#====Calculate Confidenece====
+def calculate_confidence(technical, sentiment, expert, weights=None):
+    if weights is None:
+        weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+    score = round(
+        weights["technical"] * technical +
+        weights["sentiment"] * sentiment +
+        weights["expert"] * expert,
+        2
+    )
+    return score
+
 # === Caching ===
 @st.cache_data(ttl=600)
 def get_data(symbol):
@@ -61,7 +73,9 @@ if ticker:
     technical_score = sum([weights[k] for k in signals if signals[k]])
     sentiment_score = 10
     expert_score = 10
-    overall_confidence = round(0.6 * technical_score + 0.2 * sentiment_score + 0.2 * expert_score, 2)
+    weights = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
+    overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
+
 
     stop_loss = round(price - last["ATR"], 2)
     support = df["Low"].rolling(20).min().iloc[-1]
@@ -111,16 +125,14 @@ if ticker:
 - ➡️ **Overall Confidence:** **{overall_confidence}/100**
 """)
 #=====Confidence Breakdown Table=====
-    st.progress(overall_confidence / 100)
-    
-    st.markdown("### 🧮 Confidence Scoring Table")
+   st.markdown("### 🧮 Confidence Scoring Table")
     st.markdown(f"""
-| **Component**       | **Weight (%)** | **Raw Score** | **Contribution to Total** |
-|---------------------|----------------|---------------|----------------------------|
-| **Technical Score** | 60%            | {technical_score}/100 | {0.6 * technical_score:.1f} |
-| **Sentiment Score** | 20%            | {sentiment_score}/100 | {0.2 * sentiment_score:.1f} |
-| **Expert Score**    | 20%            | {expert_score}/100 | {0.2 * expert_score:.1f} |
-|                     |                |               |                            |
+| **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
+|---------------------|----------------|---------------|------------------|
+| **Technical Score** | {weights['technical']*100:.0f}%            | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
+| **Sentiment Score** | {weights['sentiment']*100:.0f}%            | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
+| **Expert Score**    | {weights['expert']*100:.0f}%            | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
+|                     |                |               |                  |
 | **➡️ Overall Confidence** |                |               | **{overall_confidence}/100** |
 """)
 
