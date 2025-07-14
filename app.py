@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+# vim: set ts=4 sw=4 et:
+
 # === Streamlit Imports ===
 import streamlit as st
 import yfinance as yf
@@ -76,10 +79,11 @@ if ticker:
     expert_score = 10
 	
 #=== Calculate final confidence score==
-    overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
-	stop_loss = round(price - last["ATR"], 2)
-    support = df["Low"].rolling(20).min().iloc[-1]
-    resistance = df["High"].rolling(20).max().iloc[-1]
+   overall_confidence = calculate_confidence(technical_score, sentiment_score, expert_score, weights)
+	
+   stop_loss = round(price - last["ATR"], 2)
+   support = df["Low"].rolling(20).min().iloc[-1]
+   resistance = df["High"].rolling(20).max().iloc[-1]
 	
 # === Overview Panel ===
     st.subheader(f"📌 {ticker.upper()} Overview")
