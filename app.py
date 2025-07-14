@@ -148,12 +148,16 @@ def backtest_signals(
 ) -> List[TradeRecord]:
     """Enhanced backtesting with commissions and slippage"""
     trades = []
-    start_idx = max(200, df_historical.first_valid_index())  # Ensure enough data
     
-    for i in range(start_idx, len(df_historical) - 5):
+    # Ensure we have enough data (200 periods minimum)
+    if len(df_historical) < 200:
+        return trades
+    
+    # Start from index position 200 (not timestamp comparison)
+    for i in range(200, len(df_historical) - 5):
         row = df_historical.iloc[i]
         
-        # Entry signals
+        # Entry signals - modified for better reliability
         entry_condition = (
             (30 < row["RSI"] < 70) and
             (row["MACD_diff"] > 0) and
@@ -167,8 +171,8 @@ def backtest_signals(
             stop_loss = entry_price - row["ATR"] * atr_multiplier
             take_profit = entry_price + row["ATR"] * reward_multiplier
             
-            # Simulate trade
-            for j in range(i+1, min(i+6, len(df_historical))):
+            # Simulate trade over next 5 periods
+            for j in range(i+1, min(i+6, len(df_historical)):
                 future_row = df_historical.iloc[j]
                 low_price = future_row["Low"] * (1 - slippage_percent/100)
                 high_price = future_row["High"] * (1 + slippage_percent/100)
