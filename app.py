@@ -19,7 +19,8 @@ st.title("🚀 Aatif's AI-Powered Trading Hub")
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
 ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
-timeframe = st.sidebar.radio("Choose Trading Style:", ["Swing Trading", "Position Trading"], index=0, help="Intraday options data is less reliable.")
+# FIX: Re-added all trading styles
+timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
 indicator_selection = {
@@ -60,17 +61,13 @@ auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
 auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}` (from headlines)")
 auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
 
-# === FIX: Caching Error Solution ===
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
-    """This cached function now ONLY returns pickle-serializable objects (DataFrame, dict)."""
-    stock = yf.Ticker(symbol)
-    hist = stock.history(period=period, interval=interval, auto_adjust=True)
+    stock = yf.Ticker(symbol); hist = stock.history(period=period, interval=interval, auto_adjust=True)
     return (hist, stock.info) if not hist.empty else (None, None)
 
 @st.cache_data(ttl=300)
 def get_options_chain(ticker, expiry_date):
-    """This function is also cached and returns only serializable DataFrames."""
     stock_obj = yf.Ticker(ticker)
     options = stock_obj.option_chain(expiry_date)
     return options.calls, options.puts
@@ -146,31 +143,37 @@ def display_dashboard(ticker, hist, info, params, selection):
         st.markdown("---")
 
         st.subheader("🎭 Options Analysis")
-        # Create a new, temporary Ticker object to get expiration dates
         stock_obj = yf.Ticker(ticker)
         expirations = stock_obj.options
         if not expirations:
             st.warning("No options data available for this ticker.")
         else:
             exp_date_str = st.selectbox("Select Option Expiration Date:", expirations)
-            calls, puts = get_options_chain(ticker, exp_date_str) # Use the cached function
-            
-            rec_type, suggestion, reason, target_call = get_options_suggestion(overall_confidence, last['Close'], calls)
-            if rec_type == "success": st.success(suggestion)
-            elif rec_type == "info": st.info(suggestion)
-            else: st.warning(suggestion)
-            st.write(reason)
-            if target_call is not None:
-                st.write("**Example Target Option:**"); st.json(target_call.to_dict())
+            if exp_date_str:
+                calls, puts = get_options_chain(ticker, exp_date_str)
+                
+                rec_type, suggestion, reason, target_call = get_options_suggestion(overall_confidence, last['Close'], calls)
+                if rec_type == "success": st.success(suggestion)
+                elif rec_type == "info": st.info(suggestion)
+                else: st.warning(suggestion)
+                st.write(reason)
+                if target_call is not None:
+                    st.write("**Example Target Option:**"); st.json(target_call.to_dict())
 
-            st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
-            st.write("#### Call Options")
-            st.dataframe(calls[['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta']].set_index('strike'))
-            
-            with st.expander("📘 Understanding Option Greeks & IV"):
-                st.markdown("- **Implied Volatility (IV):** Market's expectation of future swings. High IV = expensive options.\n- **Delta:** Option's price change per $1 stock price change.\n- **Theta:** Time decay; how much value is lost per day.")
+                st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
+                
+                # --- FIX: Robust column selection ---
+                st.write("#### Call Options")
+                desired_cols = ['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta']
+                available_cols = [col for col in desired_cols if col in calls.columns]
+                if available_cols:
+                    st.dataframe(calls[available_cols].set_index('strike'))
+                else:
+                    st.warning("Basic options data is available, but Greeks (Delta, Theta) are missing for this ticker.")
+                
+                with st.expander("📘 Understanding Option Greeks & IV"):
+                    st.markdown("- **Implied Volatility (IV):** Market's expectation of future swings.\n- **Delta:** Option's price change per $1 stock price change.\n- **Theta:** Time decay; value lost per day.")
 
-    # Other tabs remain the same...
     with guide_tab:
         st.subheader("📘 Dynamic Indicator Guide"); st.info("This guide explains the indicators you have selected.")
         guide_data = []
@@ -191,11 +194,12 @@ def display_dashboard(ticker, hist, info, params, selection):
 
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
-    "Swing Trading": {"period": "1y", "interval": "1d"},
-    "Position Trading": {"period": "5y", "interval": "1wk"}
+    "Scalp Trading": {"period": "5d", "interval": "5m", "weights": {"technical": 0.9, "sentiment": 0.1, "expert": 0.0}},
+    "Day Trading": {"period": "60d", "interval": "60m", "weights": {"technical": 0.7, "sentiment": 0.2, "expert": 0.1}},
+    "Swing Trading": {"period": "1y", "interval": "1d", "weights": {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}},
+    "Position Trading": {"period": "5y", "interval": "1wk", "weights": {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}}
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
-selected_params_main['weights'] = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
 
 if ticker:
     try:
