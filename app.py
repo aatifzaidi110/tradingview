@@ -288,12 +288,14 @@ else:
     st.write(f"📈 ML Boost Applied: **{ml_boost}**")
 
     st.markdown("### 🧮 Confidence Scoring Table")
-   st.markdown(f"""
+ st.markdown(f"""
+### 🧮 Confidence Scoring Table
+
 | **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
 |---------------------|----------------|---------------|------------------|
 | **Technical Score** | {weights['technical']*100:.0f}% | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
 | **Sentiment Score** | {weights['sentiment']*100:.0f}% | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
 | **Expert Score**    | {weights['expert']*100:.0f}% | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
 |                     |                |               |                  |
-| **➡️ Overall Confidence** |       —        |       —       | **{overall_confidence}/100** |
+| **➡️ Overall Confidence** | — | — | **{overall_confidence}/100** |
 """)
