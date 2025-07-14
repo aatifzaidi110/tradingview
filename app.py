@@ -242,7 +242,7 @@ st.write(f"- 🏆 Win Rate: **{win_rate}%**")
     selected_strategy = strategy_map.get(timeframe, "Unknown")
     st.write(f"📌 **Strategy Type Selected:** {selected_strategy}")
 # === Dynamic Confidence Weights
-    if selected_strategy == "Scalp Trade":
+if selected_strategy == "Scalp Trade":
         weights = {"technical": 0.5, "sentiment": 0.3, "expert": 0.2}
     elif selected_strategy == "Day Trade":
         weights = {"technical": 0.6, "sentiment": 0.25, "expert": 0.15}
@@ -291,11 +291,12 @@ else:
  st.markdown(f"""
 ### 🧮 Confidence Scoring Table
 
-| **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
-|---------------------|----------------|---------------|------------------|
-| **Technical Score** | {weights['technical']*100:.0f}% | {technical_score}/100 | {weights['technical']*technical_score:.1f} |
-| **Sentiment Score** | {weights['sentiment']*100:.0f}% | {sentiment_score}/100 | {weights['sentiment']*sentiment_score:.1f} |
-| **Expert Score**    | {weights['expert']*100:.0f}% | {expert_score}/100 | {weights['expert']*expert_score:.1f} |
-|                     |                |               |                  |
+| **Component**       | **Weight (%)** | **Raw Score**       | **Contribution**          |
+|---------------------|----------------|----------------------|----------------------------|
+| **Technical Score** | {weights['technical']*100:.0f}% | {technical_score}/100       | {weights['technical']*technical_score:.1f} |
+| **Sentiment Score** | {weights['sentiment']*100:.0f}% | {sentiment_score}/100       | {weights['sentiment']*sentiment_score:.1f} |
+| **Expert Score**    | {weights['expert']*100:.0f}%    | {expert_score}/100          | {weights['expert']*expert_score:.1f} |
+|                     |                |                      |                            |
 | **➡️ Overall Confidence** | — | — | **{overall_confidence}/100** |
 """)
+
