@@ -11,7 +11,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from datetime import datetime
 
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
@@ -61,14 +60,19 @@ auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
 auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}` (from headlines)")
 auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
 
+# === FIX: Caching Error Solution ===
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
-    stock = yf.Ticker(symbol); hist = stock.history(period=period, interval=interval, auto_adjust=True)
-    return (hist, stock.info, stock) if not hist.empty else (None, None, None)
+    """This cached function now ONLY returns pickle-serializable objects (DataFrame, dict)."""
+    stock = yf.Ticker(symbol)
+    hist = stock.history(period=period, interval=interval, auto_adjust=True)
+    return (hist, stock.info) if not hist.empty else (None, None)
 
 @st.cache_data(ttl=300)
-def get_options_chain(_stock_obj, expiry_date):
-    options = _stock_obj.option_chain(expiry_date)
+def get_options_chain(ticker, expiry_date):
+    """This function is also cached and returns only serializable DataFrames."""
+    stock_obj = yf.Ticker(ticker)
+    options = stock_obj.option_chain(expiry_date)
     return options.calls, options.puts
 
 def calculate_indicators(df):
@@ -86,30 +90,19 @@ def generate_signals(last_row, selection):
     return signals
 
 def get_options_suggestion(confidence, current_price, calls):
-    """Generates a strategy suggestion based on the confidence score."""
     if confidence >= 75:
-        # High Conviction: Suggest buying an In-the-Money (ITM) Call
-        suggestion = "💡 **Strategy Suggestion: Buy an ITM Call.**"
-        reason = "High confidence suggests a strong directional move. An ITM call (Delta > 0.60) provides good leverage while having a higher probability of success than OTM calls."
-        # Find the first ITM call
-        itm_calls = calls[calls['inTheMoney']]
-        target_call = itm_calls.iloc[0] if not itm_calls.empty else "No ITM calls found."
+        suggestion = "💡 **Strategy Suggestion: Buy an ITM Call.**"; reason = "High confidence suggests a strong directional move. An ITM call (Delta > 0.60) has a higher probability of success."
+        target_call = calls[calls['inTheMoney']].iloc[0] if not calls[calls['inTheMoney']].empty else None
         return "success", suggestion, reason, target_call
     elif 60 <= confidence < 75:
-        # Moderate Conviction: Suggest a Debit Spread
-        suggestion = "💡 **Strategy Suggestion: Consider a Bull Call (Debit) Spread.**"
-        reason = "Moderate confidence favors a defined-risk strategy. A debit spread caps your risk and lowers your cost basis compared to buying a call outright."
-        # Find ATM call to buy and first OTM call to sell
-        atm_call_index = (calls['strike'] - current_price).abs().idxmin()
-        target_call = calls.loc[atm_call_index]
+        suggestion = "💡 **Strategy Suggestion: Consider a Bull Call (Debit) Spread.**"; reason = "Moderate confidence favors a defined-risk strategy, which lowers cost and caps risk."
+        target_call = calls.iloc[(calls['strike'] - current_price).abs().argsort()[:1]].iloc[0]
         return "info", suggestion, reason, target_call
     else:
-        # Low Conviction: Advise caution
-        suggestion = "💡 **Strategy Suggestion: Caution Advised.**"
-        reason = "Low confidence score suggests avoiding leveraged directional bets. The risk/reward is not favorable for buying calls or puts at this time."
+        suggestion = "💡 **Strategy Suggestion: Caution Advised.**"; reason = "Low confidence suggests avoiding leveraged directional bets."
         return "warning", suggestion, reason, None
 
-def display_dashboard(ticker, hist, info, stock_obj, params, selection):
+def display_dashboard(ticker, hist, info, params, selection):
     df = calculate_indicators(hist.copy()); last = df.iloc[-1]
     signals = generate_signals(last, selection)
     
@@ -124,7 +117,6 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
     main_tab, trade_tab, guide_tab, news_tab, info_tab = st.tabs(tab_list)
 
     with main_tab:
-        # (Content from previous version, unchanged)
         col1, col2 = st.columns([1, 2])
         with col1:
             st.subheader("💡 Confidence Score"); st.metric("Overall Confidence", f"{overall_confidence:.0f}/100"); st.progress(overall_confidence / 100)
@@ -147,86 +139,71 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
         st.subheader("📋 Suggested Trade Plan (Bullish Swing)")
         entry_zone_start = last['EMA21'] * 0.99; entry_zone_end = last['EMA21'] * 1.01
         stop_loss = last['Low'] - last['ATR']
-        profit_target = last['Close'] + (2 * (last['Close'] - stop_loss)) # 2:1 Reward/Risk
-        st.info(f"**Entry Zone:** Between **${entry_zone_start:.2f}** and **${entry_zone_end:.2f}** (around the 21 EMA).\n"
-                f"**Stop-Loss:** A close below **${stop_loss:.2f}** (recent low minus ATR).\n"
-                f"**Profit Target:** Around **${profit_target:.2f}** (based on a 2:1 Reward/Risk ratio).")
+        profit_target = last['Close'] + (2 * (last['Close'] - stop_loss))
+        st.info(f"**Entry Zone:** Between **${entry_zone_start:.2f}** and **${entry_zone_end:.2f}**.\n"
+                f"**Stop-Loss:** A close below **${stop_loss:.2f}**.\n"
+                f"**Profit Target:** Around **${profit_target:.2f}** (2:1 Reward/Risk).")
         st.markdown("---")
 
         st.subheader("🎭 Options Analysis")
+        # Create a new, temporary Ticker object to get expiration dates
+        stock_obj = yf.Ticker(ticker)
         expirations = stock_obj.options
         if not expirations:
             st.warning("No options data available for this ticker.")
         else:
             exp_date_str = st.selectbox("Select Option Expiration Date:", expirations)
-            calls, puts = get_options_chain(stock_obj, exp_date_str)
+            calls, puts = get_options_chain(ticker, exp_date_str) # Use the cached function
             
-            # Suggestion Box
             rec_type, suggestion, reason, target_call = get_options_suggestion(overall_confidence, last['Close'], calls)
             if rec_type == "success": st.success(suggestion)
             elif rec_type == "info": st.info(suggestion)
             else: st.warning(suggestion)
             st.write(reason)
             if target_call is not None:
-                st.write("**Example Target Option:**")
-                st.json(target_call.to_dict())
+                st.write("**Example Target Option:**"); st.json(target_call.to_dict())
 
-            st.markdown(f"[**🔗 Analyze this chain visually on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})", unsafe_allow_html=True)
-            
-            # Display Option Chains
+            st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
             st.write("#### Call Options")
             st.dataframe(calls[['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta']].set_index('strike'))
             
             with st.expander("📘 Understanding Option Greeks & IV"):
-                st.markdown("""
-                - **Implied Volatility (IV):** The market's expectation of future price swings. High IV means options are expensive (good for sellers); low IV means they are cheap (good for buyers).
-                - **Delta:** How much the option's price will change for every $1 change in the stock price. A Delta of `0.60` means the option price will go up ~$0.60 if the stock goes up $1.
-                - **Theta:** Time decay. How much value the option loses each day due to the passage of time. It's the "cost of holding" the option.
-                - **Vega:** Sensitivity to Implied Volatility. How much the option's price changes for every 1% change in IV.
-                """)
+                st.markdown("- **Implied Volatility (IV):** Market's expectation of future swings. High IV = expensive options.\n- **Delta:** Option's price change per $1 stock price change.\n- **Theta:** Time decay; how much value is lost per day.")
 
+    # Other tabs remain the same...
     with guide_tab:
-        # (Content from previous version)
         st.subheader("📘 Dynamic Indicator Guide"); st.info("This guide explains the indicators you have selected.")
-        indicator_guide_data = []
-        if selection.get("EMA Trend"): indicator_guide_data.append({"Indicator": "EMA Trend", "Description": "Shows trend alignment. Stacked EMAs (21>50>200) confirm a strong uptrend.", "Current Value": f"21: {last['EMA21']:.2f}", "Ideal Bullish": "21 > 50 > 200", "Status": '🟢' if signals.get("Uptrend (21>50>200 EMA)") else '🔴'})
-        if selection.get("RSI Momentum"): indicator_guide_data.append({"Indicator": "RSI (14)", "Description": "Measures momentum. We want RSI in the upper half (>50) to confirm buyer strength.", "Current Value": f"{last['RSI']:.2f}", "Ideal Bullish": "> 50", "Status": '🟢' if signals.get("Bullish Momentum (RSI > 50)") else '🔴'})
-        if selection.get("MACD Crossover"): indicator_guide_data.append({"Indicator": "MACD Diff", "Description": "Highlights momentum direction. A positive value means short-term momentum is stronger.", "Current Value": f"{last['MACD_diff']:.2f}", "Ideal Bullish": "> 0", "Status": '🟢' if signals.get("MACD Bullish (Diff > 0)") else '🔴'})
-        if selection.get("Volume Spike"): indicator_guide_data.append({"Indicator": "Volume", "Description": "Confirms conviction. A volume spike shows institutional interest.", "Current Value": f"{last['Volume']:,.0f}", "Ideal Bullish": f"> {last['Vol_Avg_50']:,.0f}", "Status": '🟢' if signals.get("Volume Spike (>1.5x Avg)") else '🔴'})
-        if indicator_guide_data: st.table(pd.DataFrame(indicator_guide_data).set_index("Indicator"))
+        guide_data = []
+        if selection.get("EMA Trend"): guide_data.append({"Indicator": "EMA Trend", "Description": "Shows trend alignment. Stacked EMAs (21>50>200) confirm a strong uptrend.", "Current": f"21: {last['EMA21']:.2f}", "Ideal": "21 > 50 > 200", "Status": '🟢' if signals.get("Uptrend (21>50>200 EMA)") else '🔴'})
+        if selection.get("RSI Momentum"): guide_data.append({"Indicator": "RSI (14)", "Description": "Measures momentum. We want RSI > 50 to confirm buyer strength.", "Current": f"{last['RSI']:.2f}", "Ideal": "> 50", "Status": '🟢' if signals.get("Bullish Momentum (RSI > 50)") else '🔴'})
+        if selection.get("MACD Crossover"): guide_data.append({"Indicator": "MACD Diff", "Description": "Highlights momentum direction. Positive value = bullish.", "Current": f"{last['MACD_diff']:.2f}", "Ideal": "> 0", "Status": '🟢' if signals.get("MACD Bullish (Diff > 0)") else '🔴'})
+        if selection.get("Volume Spike"): guide_data.append({"Indicator": "Volume", "Description": "Confirms conviction via institutional interest.", "Current": f"{last['Volume']:,.0f}", "Ideal": f"> {last['Vol_Avg_50']:,.0f}", "Status": '🟢' if signals.get("Volume Spike (>1.5x Avg)") else '🔴'})
+        if guide_data: st.table(pd.DataFrame(guide_data).set_index("Indicator"))
         else: st.warning("No indicators selected.")
-
     with news_tab:
         st.subheader(f"📰 Latest News Headlines for {ticker}")
         st.info("The AI analyzed these headlines to generate the automated sentiment score.")
-        for i, headline in enumerate(finviz_data['headlines']): st.markdown(f"{i+1}. {headline}")
-            
+        for i, h in enumerate(finviz_data['headlines']): st.markdown(f"{i+1}. {h}")
     with info_tab:
         st.subheader(f"ℹ️ About {info.get('longName', ticker)}"); st.write(f"**Sector:** {info.get('sector', 'N/A')} | **Industry:** {info.get('industry', 'N/A')}")
         st.markdown(f"**Business Summary:**"); st.info(f"{info.get('longBusinessSummary', 'No summary available.')}")
-        
-    st.sidebar.markdown("---")
-    st.sidebar.warning("Disclaimer: This tool is for educational purposes only. All financial decisions involve risk. This is not investment advice.")
+    st.sidebar.markdown("---"); st.sidebar.warning("Disclaimer: This tool is for educational purposes only. Not investment advice.")
 
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
-    "Scalp Trading": {"period": "5d", "interval": "5m"},
-    "Day Trading": {"period": "60d", "interval": "60m"},
     "Swing Trading": {"period": "1y", "interval": "1d"},
     "Position Trading": {"period": "5y", "interval": "1wk"}
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
-selected_params_main['weights'] = {
-    "technical": 0.6, "sentiment": 0.2, "expert": 0.2
-} # Simplified weights for this example
+selected_params_main['weights'] = {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}
 
 if ticker:
     try:
-        hist_data, info_data, stock_object = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
+        hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
         if hist_data is None or hist_data.empty:
             st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval.")
         else:
-            display_dashboard(ticker, hist_data, info_data, stock_object, selected_params_main, indicator_selection)
+            display_dashboard(ticker, hist_data, info_data, selected_params_main, indicator_selection)
     except Exception as e:
         st.error(f"An error occurred: {e}")
 else:
