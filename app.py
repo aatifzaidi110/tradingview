@@ -90,6 +90,31 @@ if ticker:
     chart_path = "chart.png"
     mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
+    # === Chart Timeframe Selector ===
+    st.subheader("🕰️ Select Chart Timeframe")
+    timeframe = st.radio("Choose your trading style:", [
+    "Swing Trading (1D)",
+    "Day Trading (1H)",
+    "Scalp Trading (5Min)",
+    "Position Trading (1W)"
+    ])
+
+    # Map timeframes to yfinance settings
+    tf_settings = {
+    "Swing Trading (1D)": {"interval": "1d", "period": "6mo"},
+    "Day Trading (1H)": {"interval": "1h", "period": "5d"},
+    "Scalp Trading (5Min)": {"interval": "5m", "period": "1d"},
+    "Position Trading (1W)": {"interval": "1wk", "period": "1y"}
+    }
+
+    selected = tf_settings[timeframe]
+    intraday = yf.download(ticker, interval=selected["interval"], period=selected["period"])
+    intraday.index.name = "Date"
+
+# === Dynamic Chart ===
+chart_path = "chart.png"
+mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
+st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} view")
 
     # === Recommended Timeframes ===
     with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
@@ -103,7 +128,9 @@ if ticker:
     # === Overall Confidence Score ===
     st.subheader("🧠 Overall Confidence Score")
     st.write(f"Confidence Level: **{overall_confidence}/100**")
-    st.progress(overall_confidence)
+    st.progress(overall_confidence/100)
+    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.progress(overall_confidence / 100)
 
     # === Technical Indicator Table ===
     st.subheader("📊 Technical Indicator Breakdown")
