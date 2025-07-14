@@ -10,92 +10,89 @@ import mplfinance as mpf
 import os
 import requests
 from bs4 import BeautifulSoup
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # === NEW: Import VADER ===
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Analyzer", layout="wide")
-st.title("🤖 Aatif's AI-Powered Trade Analyzer")
+st.title("📈 Aatif's Customizable AI Trade Analyzer")
 
-# === DATA SCRAPING & NLP ANALYSIS (The New Engine) ===
+# === SIDEBAR: Controls & Selections ===
+st.sidebar.header("⚙️ Controls")
+ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
+timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
+
+st.sidebar.header("🔧 Technical Indicator Selection")
+st.sidebar.info("Select the indicators you want to use for scoring and display.")
+indicator_selection = {
+    "EMA Trend": st.sidebar.checkbox("EMA Trend (21, 50, 200)", value=True, help="Use the EMA stack for trend scoring and chart display."),
+    "RSI Momentum": st.sidebar.checkbox("RSI Momentum", value=True, help="Use RSI > 50 for bullish momentum scoring."),
+    "MACD Crossover": st.sidebar.checkbox("MACD Crossover", value=True, help="Use MACD difference for momentum scoring."),
+    "Volume Spike": st.sidebar.checkbox("Volume Spike", value=True, help="Use Volume vs. 50-day average for scoring."),
+    "Bollinger Bands": st.sidebar.checkbox("Bollinger Bands Display", value=True, help="Display Bollinger Bands on the chart for visual context (not used in scoring).")
+}
+
+st.sidebar.header("🧠 Qualitative Scores")
+auto_sentiment_score_placeholder = st.sidebar.empty()
+sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, 50)
+auto_expert_score_placeholder = st.sidebar.empty()
+expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, 50)
+
+# === Core Functions ===
 @st.cache_data(ttl=900)
 def get_finviz_data(ticker):
-    """Scrapes Finviz and analyzes sentiment of headlines using VADER."""
     url = f"https://finviz.com/quote.ashx?t={ticker}"; headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         response = requests.get(url, headers=headers); response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Expert Score
-        recom_tag = soup.find('td', text='Recom')
-        analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
-        
-        # Sentiment Score (VADER Analysis)
+        recom_tag = soup.find('td', text='Recom'); analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
         headlines = [tag.text for tag in soup.findAll('a', class_='news-link-left')[:10]]
         analyzer = SentimentIntensityAnalyzer()
         compound_scores = [analyzer.polarity_scores(h)['compound'] for h in headlines]
         avg_compound = sum(compound_scores) / len(compound_scores) if compound_scores else 0
-        
         return {"recom": analyst_recom, "headlines": headlines, "sentiment_compound": avg_compound}
-    except Exception as e:
-        st.sidebar.warning(f"Finviz scrape failed: {e}", icon="⚠️")
-        return {"recom": "N/A", "headlines": [], "sentiment_compound": 0}
+    except Exception: return {"recom": "N/A", "headlines": [], "sentiment_compound": 0}
 
-# Mapping and Conversion Functions
 EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell": 15, "Strong Sell": 0}
-def convert_compound_to_100_scale(compound_score):
-    """Converts VADER's -1 to +1 score to our 0-100 scale."""
-    return int((compound_score + 1) * 50)
+def convert_compound_to_100_scale(compound_score): return int((compound_score + 1) * 50)
 
-# === SIDEBAR: User Inputs ===
-st.sidebar.header("⚙️ Controls")
-ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
-if st.sidebar.button("🔄 Refresh Automated Scores", help="Force a new data scrape from Finviz."):
-    st.cache_data.clear()
-    st.rerun() # === FIX: Use st.rerun() instead of experimental_rerun() ===
-
-timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
-
-st.sidebar.header("🧠 Qualitative Scores")
-# Get automated data
+# Update sidebar placeholders with automated data
 finviz_data = get_finviz_data(ticker)
 auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
-auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50) # Use .get for safety
+auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
+auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}` (from headlines)")
+auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
 
-st.sidebar.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}` (from headlines)")
-sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
-
-st.sidebar.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
-expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
-
-# Map styles to yfinance intervals and define weights
-TIMEFRAME_MAP = {
-    "Scalp Trading": {"p": "1d", "i": "5m", "w": {"t": 0.9, "s": 0.1, "e": 0.0}},
-    "Day Trading": {"p": "60d", "i": "60m", "w": {"t": 0.7, "s": 0.2, "e": 0.1}},
-    "Swing Trading": {"p": "1y", "i": "1d", "w": {"t": 0.6, "s": 0.2, "e": 0.2}},
-    "Position Trading": {"p": "5y", "i": "1wk", "w": {"t": 0.4, "s": 0.2, "e": 0.4}}
-}
-selected_params = TIMEFRAME_MAP[timeframe]
-weights = {"technical": selected_params['w']['t'], "sentiment": selected_params['w']['s'], "expert": selected_params['w']['e']}
-
-
-# === Core Functions (unchanged) ===
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
     stock = yf.Ticker(symbol); hist = stock.history(period=period, interval=interval, auto_adjust=True)
     return (hist, stock.info) if not hist.empty else (None, None)
+
 def calculate_indicators(df):
+    # Always calculate all for potential use, but only score selected ones
     df["EMA21"]=ta.trend.ema_indicator(df["Close"],21); df["EMA50"]=ta.trend.ema_indicator(df["Close"],50); df["EMA200"]=ta.trend.ema_indicator(df["Close"],200)
     df["RSI"]=ta.momentum.RSIIndicator(df["Close"]).rsi(); bb=ta.volatility.BollingerBands(df["Close"]); df["BB_low"]=bb.bollinger_lband(); df["BB_high"]=bb.bollinger_hband()
     df["MACD_diff"]=ta.trend.macd_diff(df["Close"]); df["ATR"]=ta.volatility.AverageTrueRange(df["High"],df["Low"],df["Close"]).average_true_range()
     df["Vol_Avg_50"]=df["Volume"].rolling(50).mean(); return df
-def generate_signals(last_row):
-    is_uptrend = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
-    return {"Uptrend (21>50>200 EMA)": is_uptrend, "Bullish Momentum (RSI > 50)": last_row["RSI"] > 50,
-            "MACD Bullish (Diff > 0)": last_row["MACD_diff"] > 0, "Volume Spike (>1.5x Avg)": last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5}
+
+def generate_signals(last_row, selection):
+    """Generates signals ONLY for the user-selected indicators."""
+    signals = {}
+    if selection.get("EMA Trend"):
+        signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
+    if selection.get("RSI Momentum"):
+        signals["Bullish Momentum (RSI > 50)"] = last_row["RSI"] > 50
+    if selection.get("MACD Crossover"):
+        signals["MACD Bullish (Diff > 0)"] = last_row["MACD_diff"] > 0
+    if selection.get("Volume Spike"):
+        signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
+    return signals
+
 def calculate_confidence(scores, weights):
     score = (weights["technical"] * scores["technical"] + weights["sentiment"] * scores["sentiment"] + weights["expert"] * scores["expert"])
     return min(round(score, 2), 100)
+
 def get_recommendation(timeframe, technical_score, overall_confidence):
+    # This logic remains the same, providing advice based on the final scores
     if timeframe == "Scalp Trading":
         if technical_score >= 80: return "success", "⚡ Scalp Signal Met — Quick entry momentum is strong."
         return "warning", "🚫 Weak Momentum — Not ideal for scalping."
@@ -111,13 +108,19 @@ def get_recommendation(timeframe, technical_score, overall_confidence):
     return "error", "Unknown strategy."
 
 # === Main Dashboard Function ===
-def display_dashboard(ticker, hist, info, params):
-    df = calculate_indicators(hist.copy()); last = df.iloc[-1]; signals = generate_signals(last)
-    technical_score = sum([1 for fired in signals.values() if fired]) / len(signals) * 100
-    scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
-    overall_confidence = calculate_confidence(scores, weights)
+def display_dashboard(ticker, hist, info, params, selection):
+    df = calculate_indicators(hist.copy()); last = df.iloc[-1]
     
-    st.header(f"Analysis for {ticker} ({params['i']} Interval)")
+    # --- DYNAMIC SCORING based on selection ---
+    signals = generate_signals(last, selection)
+    fired_signals = sum(1 for fired in signals.values() if fired)
+    selected_signals_count = len(signals)
+    technical_score = (fired_signals / selected_signals_count) * 100 if selected_signals_count > 0 else 0
+
+    scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
+    overall_confidence = calculate_confidence(scores, params['weights'])
+    
+    st.header(f"Analysis for {ticker} ({params['interval']} Interval)")
     rec_type, rec_text = get_recommendation(timeframe, technical_score, overall_confidence)
     if rec_type == "success": st.success(rec_text)
     elif rec_type == "warning": st.warning(rec_text)
@@ -128,38 +131,57 @@ def display_dashboard(ticker, hist, info, params):
         col1, col2 = st.columns([1, 2])
         with col1:
             st.subheader("💡 Confidence Score"); st.metric("Overall Confidence", f"{overall_confidence:.0f}/100"); st.progress(overall_confidence / 100)
-            st.markdown(f"- **Technical:** `{scores['technical']:.0f}` (W: `{weights['technical']*100:.0f}%`)\n"
-                        f"- **Sentiment:** `{scores['sentiment']:.0f}` (W: `{weights['sentiment']*100:.0f}%`)\n"
-                        f"- **Expert:** `{scores['expert']:.0f}` (W: `{weights['expert']*100:.0f}%`)")
+            st.markdown(f"- **Technical:** `{scores['technical']:.0f}` (W: `{params['weights']['technical']*100:.0f}%`)\n"
+                        f"- **Sentiment:** `{scores['sentiment']:.0f}` (W: `{params['weights']['sentiment']*100:.0f}%`)\n"
+                        f"- **Expert:** `{scores['expert']:.0f}` (W: `{params['weights']['expert']*100:.0f}%`)")
+            
             st.subheader("✅ Technical Checklist")
-            for signal, fired in signals.items(): st.markdown(f"- {'🟢' if fired else '🔴'} {signal}")
+            if not signals:
+                st.warning("No technical indicators selected for scoring.")
+            for signal, fired in signals.items(): 
+                st.markdown(f"- {'🟢' if fired else '🔴'} {signal}")
+
             st.subheader("🎯 Key Price Levels")
             resistance = df["High"][-60:].max(); support = df["Low"][-60:].min()
             st.write(f"**Support:** ${support:.2f} | **Resistance:** ${resistance:.2f}")
-            st.write(f"**ATR:** {last['ATR']:.3f} | **Suggested SL:** ${last['Close'] - 1.5 * last['ATR']:.2f}")
+            st.write(f"**ATR (Volatility):** {last['ATR']:.3f}")
+
         with col2:
             st.subheader("📈 Price Chart"); chart_path = f"chart_{ticker}.png"
-            ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])]
-            mpf.plot(df.tail(120), type='candle', style='yahoo', mav=(21, 50, 200), volume=True, addplot=ap,
-                     title=f"{ticker} - {params['i']} chart", savefig=chart_path)
+            # --- DYNAMIC CHART PLOTTING ---
+            mav_tuple = (21, 50, 200) if selection.get("EMA Trend") else None
+            ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])] if selection.get("Bollinger Bands") else None
+            mpf.plot(df.tail(120), type='candle', style='yahoo', mav=mav_tuple, volume=True, addplot=ap,
+                     title=f"{ticker} - {params['interval']} chart", savefig=chart_path)
             st.image(chart_path)
             if os.path.exists(chart_path): os.remove(chart_path)
+
     with tab2:
         st.subheader(f"📰 Latest News Headlines for {ticker}")
-        st.info("The AI analyzed these headlines to generate the automated sentiment score. You can use them to inform your final adjustment.")
+        st.info("The AI analyzed these headlines to generate the automated sentiment score.")
         for i, headline in enumerate(finviz_data['headlines']): st.markdown(f"{i+1}. {headline}")
+            
     with tab3:
         st.subheader(f"ℹ️ About {info.get('longName', ticker)}"); st.write(f"**Sector:** {info.get('sector', 'N/A')} | **Industry:** {info.get('industry', 'N/A')}")
         st.markdown(f"**Business Summary:**"); st.info(f"{info.get('longBusinessSummary', 'No summary available.')}")
 
 # === Main Script Execution ===
+# Map styles to yfinance intervals and define weights
+TIMEFRAME_MAP = {
+    "Scalp Trading": {"period": "1d", "interval": "5m", "weights": {"technical": 0.9, "sentiment": 0.1, "expert": 0.0}},
+    "Day Trading": {"period": "60d", "interval": "60m", "weights": {"technical": 0.7, "sentiment": 0.2, "expert": 0.1}},
+    "Swing Trading": {"period": "1y", "interval": "1d", "weights": {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}},
+    "Position Trading": {"period": "5y", "interval": "1wk", "weights": {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}}
+}
+selected_params = TIMEFRAME_MAP[timeframe]
+
 if ticker:
     try:
-        hist_data, info_data = get_data(ticker, selected_params['p'], selected_params['i'])
+        hist_data, info_data = get_data(ticker, selected_params['period'], selected_params['interval'])
         if hist_data is None or hist_data.empty:
-            st.error(f"Could not fetch data for {ticker} on a {selected_params['i']} interval.")
+            st.error(f"Could not fetch data for {ticker} on a {selected_params['interval']} interval.")
         else:
-            display_dashboard(ticker, hist_data, info_data, selected_params)
+            display_dashboard(ticker, hist_data, info_data, selected_params, indicator_selection)
     except Exception as e:
         st.error(f"An error occurred: {e}")
 else:
