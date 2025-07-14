@@ -70,9 +70,8 @@ if ticker:
     }
 
     technical_score = sum([weights[key] for key in signals if signals[key]])
-
-    sentiment_score = 10  # Temporary placeholder
-    expert_score = 10     # Temporary placeholder
+    sentiment_score = 10  # Placeholder
+    expert_score = 10     # Placeholder
 
     overall_confidence = round(
         0.6 * technical_score +
@@ -90,8 +89,8 @@ if ticker:
     chart_path = "chart.png"
     mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
- 
- # === Chart Timeframe Selector ===
+
+    # === Chart Timeframe Selector ===
     st.subheader("🕰️ Select Chart Timeframe")
     timeframe = st.radio("Choose your trading style:", [
         "Swing Trading (1D)",
@@ -100,7 +99,6 @@ if ticker:
         "Position Trading (1W)"
     ])
 
-    # Mapping to yfinance settings
     tf_settings = {
         "Swing Trading (1D)": {"interval": "1d", "period": "6mo"},
         "Day Trading (1H)": {"interval": "1h", "period": "5d"},
@@ -112,11 +110,10 @@ if ticker:
     intraday = yf.download(ticker, interval=selected["interval"], period=selected["period"])
     intraday.index.name = "Date"
 
-# === Dynamic Chart Snapshot ===
-chart_path = "chart.png"
-mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
-st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
-
+    # === Dynamic Chart Snapshot ===
+    chart_path = "chart.png"
+    mpf.plot(intraday, type='candle', mav=(21, 50), volume=True, style='yahoo', savefig=chart_path)
+    st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View")
 
     # === Recommended Timeframes ===
     with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
@@ -129,8 +126,6 @@ st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View"
 
     # === Overall Confidence Score ===
     st.subheader("🧠 Overall Confidence Score")
-    st.write(f"Confidence Level: **{overall_confidence}/100**")
-    st.progress(overall_confidence/100)
     st.write(f"Confidence Level: **{overall_confidence}/100**")
     st.progress(overall_confidence / 100)
 
@@ -171,37 +166,4 @@ st.image(chart_path, caption=f"{ticker.upper()} — {selected['interval']} View"
     # === Support / Resistance ===
     st.subheader("📈 Support & Resistance")
     st.write(f"- Support: ${support:.2f}")
-    st.write(f"- Resistance: ${resistance:.2f}")
-
-    # === Sentiment & Expert Links ===
-    st.subheader("💬 Sentiment & Expert Scores")
-    google_news = f"https://news.google.com/search?q={ticker}+stock"
-    finviz = f"https://finviz.com/quote.ashx?t={ticker}"
-    barchart = f"https://www.barchart.com/stocks/quotes/{ticker}/overview"
-    tipranks = f"https://www.tipranks.com/stocks/{ticker}/forecast"
-    st.markdown(f"- [📰 Google News]({google_news})")
-    st.markdown(f"- [📊 Finviz]({finviz})")
-    st.markdown(f"- [📈 Barchart]({barchart})")
-    st.markdown(f"- [🎯 TipRanks]({tipranks})")
-
-    # === Journaling Module ===
-    st.subheader("📝 Trade Journal")
-    note = st.text_area("Add notes or rationale for this analysis:")
-
-    if st.button("Log Analysis"):
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-        journal_entry = {
-            "Timestamp": timestamp,
-            "Ticker": ticker.upper(),
-            "Confidence": overall_confidence,
-            "Technical Score": technical_score,
-            "Sentiment Score": sentiment_score,
-            "Expert Score": expert_score,
-            "Stop Loss": stop_loss,
-            "Notes": note
-        }
-        log_df = pd.DataFrame([journal_entry])
-        if os.path.exists("journal.csv"):
-            log_df.to_csv("journal.csv", mode="a", header=False, index=False)
-        else:
-            st.warning("⏳ No trades triggered in last 30 bars.")
+    st.write(f"- Resistance:
