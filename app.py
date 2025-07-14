@@ -148,15 +148,24 @@ st.subheader("📊 Confidence Weight Distribution")
 
 labels = ["Technical", "Sentiment", "Expert"]
 raw_scores = [technical_score, sentiment_score, expert_score]
-weights_list = [weights["technical"], weights["sentiment"], weights["expert"]]
-contributions = [round(raw_scores[i] * weights_list[i], 1) for i in range(3)]
+contributions = [
+    round(raw_scores[0] * weights["technical"], 1),
+    round(raw_scores[1] * weights["sentiment"], 1),
+    round(raw_scores[2] * weights["expert"], 1)
+]
 
 fig, ax = plt.subplots()
-ax.pie(contributions, labels=[f"{labels[i]} ({contributions[i]})" for i in range(3)],
-       autopct="%1.1f%%", startangle=90, colors=["#4CAF50", "#2196F3", "#FFC107"])
+colors = ["#4CAF50", "#2196F3", "#FFC107"]
+ax.pie(
+    contributions,
+    labels=[f"{labels[i]} ({contributions[i]})" for i in range(3)],
+    autopct="%1.1f%%",
+    startangle=90,
+    colors=colors
+)
 ax.axis("equal")
-
 st.pyplot(fig)
+
 
 #=======Backtest function========
 def backtest_signals(df, atr_multiplier=1.0, reward_multiplier=2.0):
