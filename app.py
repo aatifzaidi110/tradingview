@@ -3,8 +3,6 @@ import yfinance as yf
 import pandas as pd
 import ta
 import mplfinance as mpf
-import datetime
-import os
 
 st.set_page_config(page_title="Aatif's Swing Dashboard", layout="centered")
 st.title("📊 Aatif's Swing Trade Analyzer")
@@ -38,7 +36,6 @@ if ticker:
             st.experimental_rerun()
         st.stop()
 
-    # === Technical Prep ===
     df = hist.copy()
     df["EMA21"] = ta.trend.ema_indicator(df["Close"], 21)
     df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
@@ -51,7 +48,7 @@ if ticker:
     df["Vol_Avg"] = df["Volume"].rolling(50).mean()
     last = df.iloc[-1]
 
-    # === Signal Logic ===
+    # === Signals & Scores ===
     signals = {
         "RSI": last["RSI"] < 30 or last["RSI"] > 50,
         "MACD": last["MACD_diff"] > 0,
@@ -69,8 +66,8 @@ if ticker:
     stop_loss = round(price - last["ATR"], 2)
     support = df["Low"].rolling(20).min().iloc[-1]
     resistance = df["High"].rolling(20).max().iloc[-1]
-    
-      # === Trade Overview Panel ===
+
+    # === Overview Panel ===
     st.subheader(f"📌 {ticker.upper()} Overview")
     col1, col2 = st.columns(2)
     with col1:
@@ -86,73 +83,50 @@ if ticker:
         st.markdown(f"- [📊 Finviz](https://finviz.com/quote.ashx?t={ticker})")
         st.markdown(f"- [📈 Barchart](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
         st.markdown(f"- [🎯 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
- 
- # === Chart Snapshot
+
+    # === Chart Snapshot
     st.subheader("🖼️ Chart Snapshot")
     chart_path = "chart.png"
     mpf.plot(df[-60:], type='candle', mav=(21, 50, 200), volume=True, style='yahoo', savefig=chart_path)
     st.image(chart_path, caption=f"{ticker.upper()} - Last 60 Days")
 
- #====Sentiment & Expert Panel===
+    # === Sentiment & Expert Panel ===
     st.subheader("🧠 Sentiment & Expert Analysis")
-
     col1, col2 = st.columns(2)
     with col1:
         st.write(f"**Sentiment Score:** {sentiment_score}/100")
         st.markdown(f"- [📰 Latest News](https://news.google.com/search?q={ticker}+stock)")
         st.markdown(f"- [🗂 Finviz Headlines](https://finviz.com/quote.ashx?t={ticker})")
-
     with col2:
         st.write(f"**Expert Score:** {expert_score}/100")
         st.markdown(f"- [📈 TipRanks](https://www.tipranks.com/stocks/{ticker}/forecast)")
         st.markdown(f"- [📊 Barchart Summary](https://www.barchart.com/stocks/quotes/{ticker}/overview)")
 
     # === Confidence Summary
-    st.subheader("🧠 Overall Confidence Score")
-    st.write(f"Confidence Level: **{overall_confidence}/100**")
+    st.subheader("🧮 Confidence Breakdown")
+    st.write(f"""
+- **Technical Score:** {technical_score}/100  
+- **Sentiment Score:** {sentiment_score}/100  
+- **Expert Score:** {expert_score}/100  
+- ➡️ **Overall Confidence:** **{overall_confidence}/100**
+""")
     st.progress(overall_confidence / 100)
 
- # === Confidence Summary
-    st.subheader("🧠 Overall Confidence Score")
-    st.write(f"Confidence Level: **{overall_confidence}/100**")
-    st.progress(overall_confidence / 100)
-
-    # === Breakdown Table
+    # === Technical Indicator Table with Full Descriptions
     st.subheader("📊 Technical Indicator Breakdown")
     st.markdown(f"""
-| **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                       | **Status** |
-|-------------------|--------------------------|------------------------------------------------|------------|
-| **RSI**           | {last['RSI']:.2f}         | Momentum: <30 entry, >85 exit                  | {color_status(signals["RSI"])} |
-| **MACD Diff**     | {last['MACD_diff']:.2f}   | Bullish momentum. >0 indicates strength        | {color_status(signals["MACD"])} |
-| **EMA Stack**     | 21>{last['EMA21']:.2f} > 50>{last['EMA50']:.2f} > 200>{last['EMA200']:.2f} | 21 > 50 > 200 = strong trend | {color_status(signals["EMA"])} |
-| **ATR Breakout**  | {last['ATR']:.2f}         | Volatility trigger: Price > Previous + ATR     | {color_status(signals["ATR"])} |
-| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | >1.5× avg = confirmed interest               | {color_status(signals["Volume"])} |
-| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Bounce zone below lower band                   | {color_status(signals["BB"])} |
+| **Indicator**     | **Current Value ({ticker.upper()})** | **Meaning & Ideal Range**                                                                                 | **Status** |
+|-------------------|--------------------------|------------------------------------------------------------------------------------------------------------|------------|
+| **RSI**           | {last['RSI']:.2f}         | Measures overbought/oversold momentum. Ideal: <30 = oversold, >70 = overbought.                          | {color_status(signals["RSI"])} |
+| **MACD Diff**     | {last['MACD_diff']:.2f}   | Indicates trend direction & strength. Ideal: >0 for bullish momentum.                                     | {color_status(signals["MACD"])} |
+| **EMA Stack**     | 21>{last['EMA21']:.2f} > 50>{last['EMA50']:.2f} > 200>{last['EMA200']:.2f} | Alignment of short- to long-term trends. Ideal: 21 > 50 > 200.         | {color_status(signals["EMA"])} |
+| **ATR Breakout**  | {last['ATR']:.2f}         | Gauges volatility. Ideal: price > previous close + ATR for a breakout.                                    | {color_status(signals["ATR"])} |
+| **Volume Spike**  | {last['Volume']:.0f} vs Avg(50): {last['Vol_Avg']:.0f} | Highlights interest. Ideal: volume > 1.5× average for strong moves.      | {color_status(signals["Volume"])} |
+| **Bollinger Band**| Price < ${last['BB_low']:.2f} | Shows price extremes. Ideal: near lower band may suggest bounce.            | {color_status(signals["BB"])} |
 """)
 
-       # === Strategy Recommendation
-    st.subheader("🎯 Strategy Recommendation")
-    if technical_score >= 80:
-        st.success("✅ Entry Signal Met — High Conviction")
-        st.write(f"Suggested Stop Loss: ${stop_loss}")
-    elif technical_score >= 60:
-        st.info("⏳ Watchlist Setup — Wait for Confirmation")
-    else:
-        st.warning("🚫 Weak Signal — Avoid or Monitor")
- # === Timeframe Selector (Disabled)
+    # === Timeframe Selector (Disabled)
     st.subheader("🕰️ Chart Timeframe Selector (Temporarily Disabled)")
     st.info("Intraday charting is currently disabled to avoid Yahoo rate limit errors. Full multi-timeframe support will return soon.")
 
-    # Optional: Keep style selector
     timeframe = st.radio("Choose your trading style:", [
-        "Swing Trading (1D)", "Day Trading (1H)", "Scalp Trading (5Min)", "Position Trading (1W)"
-    ])
-
-    # === Strategy Expander
-    with st.expander("🕰️ Recommended Chart Timeframes by Strategy"):
-        st.markdown("""
-        - **Scalp Trading** → 1-min or 5-min for precision  
-        - **Day Trading** → 15-min to 1-hour for intraday setups  
-        - **Swing Trading** → 1-day charts for multi-session trends  
-        - **Position Trades / Investing** → Weekly charts for macro view  
-        """)
