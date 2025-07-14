@@ -125,7 +125,7 @@ if ticker:
 - ➡️ **Overall Confidence:** **{overall_confidence}/100**
 """)
 #=====Confidence Breakdown Table=====
-   st.markdown("### 🧮 Confidence Scoring Table")
+    st.markdown("### 🧮 Confidence Scoring Table")
     st.markdown(f"""
 | **Component**       | **Weight (%)** | **Raw Score** | **Contribution** |
 |---------------------|----------------|---------------|------------------|
