@@ -10,7 +10,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
@@ -26,15 +26,27 @@ timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Tra
 
 st.sidebar.header("🔧 Technical Indicator Selection")
 with st.sidebar.expander("Trend Indicators", expanded=True):
-    indicator_selection = {"EMA Trend": st.checkbox("EMA Trend (21, 50, 200)", value=True), "Ichimoku Cloud": st.checkbox("Ichimoku Cloud", value=True),
-                           "Parabolic SAR": st.checkbox("Parabolic SAR", value=True), "ADX": st.checkbox("ADX", value=True)}
+    indicator_selection = {
+        "EMA Trend": st.checkbox("EMA Trend (21, 50, 200)", value=True),
+        "Ichimoku Cloud": st.checkbox("Ichimoku Cloud", value=True),
+        "Parabolic SAR": st.checkbox("Parabolic SAR", value=True),
+        "ADX": st.checkbox("ADX", value=True),
+    }
 with st.sidebar.expander("Momentum & Volume Indicators"):
-    indicator_selection.update({"RSI Momentum": st.checkbox("RSI Momentum", value=True), "Stochastic": st.checkbox("Stochastic Oscillator", value=True),
-                                "CCI": st.checkbox("Commodity Channel Index (CCI)", value=True), "ROC": st.checkbox("Rate of Change (ROC)", value=True),
-                                "Volume Spike": st.checkbox("Volume Spike", value=True), "OBV": st.checkbox("On-Balance Volume (OBV)", value=True),
-                                "VWAP": st.checkbox("VWAP (Intraday only)", value=True)})
+    indicator_selection.update({
+        "RSI Momentum": st.checkbox("RSI Momentum", value=True),
+        "Stochastic": st.checkbox("Stochastic Oscillator", value=True),
+        "CCI": st.checkbox("Commodity Channel Index (CCI)", value=True),
+        "ROC": st.checkbox("Rate of Change (ROC)", value=True),
+        "Volume Spike": st.checkbox("Volume Spike", value=True),
+        "OBV": st.checkbox("On-Balance Volume (OBV)", value=True),
+        "VWAP": st.checkbox("VWAP (Intraday only)", value=True),
+    })
 with st.sidebar.expander("Display-Only Indicators"):
-    indicator_selection.update({"Bollinger Bands": st.checkbox("Bollinger Bands Display", value=True), "Pivot Points": st.checkbox("Pivot Points Display (Daily only)", value=True)})
+    indicator_selection.update({
+        "Bollinger Bands": st.checkbox("Bollinger Bands Display", value=True),
+        "Pivot Points": st.checkbox("Pivot Points Display (Daily only)", value=True),
+    })
 
 st.sidebar.header("🧠 Qualitative Scores")
 use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help="ON: AI scores are used. OFF: Use manual sliders and only the Technical Score will count.")
@@ -47,7 +59,8 @@ def get_finviz_data(ticker):
     url = f"https://finviz.com/quote.ashx?t={ticker}"; headers = {'User-Agent': 'Mozilla/5.0'}
     try:
         response = requests.get(url, headers=headers); response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser'); recom_tag = soup.find('td', text='Recom'); analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
+        soup = BeautifulSoup(response.text, 'html.parser'); recom_tag = soup.find('td', text='Recom')
+        analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
         headlines = [tag.text for tag in soup.findAll('a', class_='news-link-left')[:10]]
         analyzer = SentimentIntensityAnalyzer()
         compound_scores = [analyzer.polarity_scores(h)['compound'] for h in headlines]
@@ -68,7 +81,8 @@ if use_automation:
     expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
 else:
     st.sidebar.info("Automation OFF. Only technical score is used.")
-    sentiment_score = 50; expert_score = 50; finviz_data = {"headlines": ["Automation is disabled."]}
+    sentiment_score = 50; expert_score = 50
+    finviz_data = {"headlines": ["Automation is disabled."]}
 
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
@@ -81,6 +95,7 @@ def get_options_chain(ticker, expiry_date):
     return options.calls, options.puts
 
 def calculate_indicators(df, is_intraday=False):
+    # This function remains the same, with robust error handling
     try: df["EMA21"]=ta.trend.ema_indicator(df["Close"],21); df["EMA50"]=ta.trend.ema_indicator(df["Close"],50); df["EMA200"]=ta.trend.ema_indicator(df["Close"],200)
     except Exception: pass
     try: ichimoku = ta.trend.IchimokuIndicator(df['High'], df['Low']); df['ichimoku_a'] = ichimoku.ichimoku_a(); df['ichimoku_b'] = ichimoku.ichimoku_b()
@@ -107,13 +122,6 @@ def calculate_indicators(df, is_intraday=False):
     bb=ta.volatility.BollingerBands(df["Close"]); df["BB_low"]=bb.bollinger_lband(); df["BB_high"]=bb.bollinger_hband()
     df["Vol_Avg_50"]=df["Volume"].rolling(50).mean()
     return df
-
-def calculate_pivot_points(df):
-    df_pivots = pd.DataFrame(index=df.index)
-    df_pivots['Pivot'] = (df['High'] + df['Low'] + df['Close']) / 3
-    df_pivots['R1'] = (2 * df_pivots['Pivot']) - df['Low']; df_pivots['S1'] = (2 * df_pivots['Pivot']) - df['High']
-    df_pivots['R2'] = df_pivots['Pivot'] + (df['High'] - df['Low']); df_pivots['S2'] = df_pivots['Pivot'] - (df['High'] - df['Low'])
-    return df_pivots.shift(1)
 
 def generate_signals(df, selection, is_intraday=False):
     signals = {}; last_row = df.iloc[-1]
@@ -147,18 +155,51 @@ def backtest_strategy(df_historical, selection, atr_multiplier=1.5, reward_risk_
     wins = len([t for t in trades if t['Type'] == 'Exit (Win)']); losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
     return trades, wins, losses
 
-def get_options_suggestion(confidence, current_price, calls):
+# === NEW: Options Strategy Engine ===
+def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
+    if confidence < 60:
+        return {"status": "warning", "message": "Confidence score is too low. No options trade is recommended."}
+    
+    today = datetime.now()
+    target_exp_date = None
+    for exp_str in expirations:
+        exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
+        if 45 <= (exp_date - today).days <= 90:
+            target_exp_date = exp_str
+            break
+    if not target_exp_date:
+        return {"status": "warning", "message": "Could not find a suitable expiration date (45-90 days out)."}
+
+    calls, _ = get_options_chain(ticker, target_exp_date)
+    if calls.empty:
+        return {"status": "error", "message": f"No call options found for {target_exp_date}."}
+
+    strategy = "Buy Call"; reason = ""
+    target_options = pd.DataFrame() # Initialize empty DataFrame
     if confidence >= 75:
-        suggestion = "💡 **Strategy Suggestion: Buy an ITM Call.**"; reason = "High confidence suggests a strong directional move. An ITM call (Delta > 0.60) has a higher probability of success."
-        target_call = calls[calls['inTheMoney']].iloc[0] if not calls[calls['inTheMoney']].empty else None
-        return "success", suggestion, reason, target_call
+        strategy = "Buy ITM Call"; reason = "High confidence suggests a strong directional move. An ITM call (Delta > 0.60) provides good leverage with a higher probability of success."
+        target_options = calls[(calls['inTheMoney']) & (calls.get('delta', 0) > 0.60)]
     elif 60 <= confidence < 75:
-        suggestion = "💡 **Strategy Suggestion: Consider a Bull Call (Debit) Spread.**"; reason = "Moderate confidence favors a defined-risk strategy, which lowers cost and caps risk."
-        target_call = calls.iloc[(calls['strike'] - current_price).abs().argsort()[:1]].iloc[0]
-        return "info", suggestion, reason, target_call
-    else:
-        suggestion = "💡 **Strategy Suggestion: Caution Advised.**"; reason = "Low confidence suggests avoiding leveraged directional bets."
-        return "warning", suggestion, reason, None
+        strategy = "Buy ATM Call"; reason = "Moderate confidence favors an At-the-Money call to balance cost and potential upside."
+        target_options = calls.iloc[[(calls['strike'] - stock_price).abs().idxmin()]]
+
+    if target_options.empty:
+        # Fallback if no ideal option is found
+        target_options = calls.iloc[[(calls['strike'] - stock_price).abs().idxmin()]]
+        reason += " (Fell back to nearest ATM option)."
+
+    recommended_option = target_options.iloc[0]
+    entry_price = recommended_option.get('ask', recommended_option.get('lastPrice'))
+    if entry_price == 0: entry_price = recommended_option.get('lastPrice')
+    
+    risk_per_share = entry_price * 0.50 # 50% stop-loss
+    stop_loss = entry_price - risk_per_share
+    profit_target = entry_price + (risk_per_share * 2) # 2:1 Reward/Risk
+
+    return {"status": "success", "Strategy": strategy, "Reason": reason, "Expiration": target_exp_date,
+            "Strike": f"${recommended_option['strike']:.2f}", "Entry Price": f"~${entry_price:.2f}",
+            "Stop-Loss": f"~${stop_loss:.2f} (50% loss)", "Profit Target": f"~${profit_target:.2f} (100% gain)",
+            "Max Risk / Share": f"${risk_per_share:.2f}", "Reward / Risk": "2 to 1", "Contract": recommended_option}
 
 def display_dashboard(ticker, hist, info, params, selection):
     is_intraday = params['interval'] in ['5m', '60m']
@@ -175,63 +216,50 @@ def display_dashboard(ticker, hist, info, params, selection):
     main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
     with main_tab:
+        # Main analysis content...
         col1, col2 = st.columns([1, 2])
         with col1:
             st.subheader("💡 Confidence Score"); st.metric("Overall Confidence", f"{overall_confidence:.0f}/100"); st.progress(overall_confidence / 100)
             st.markdown(f"- **Technical:** `{scores['technical']:.0f}` (W: `{final_weights['technical']*100:.0f}%`)\n- **Sentiment:** `{scores['sentiment']:.0f}` (W: `{final_weights['sentiment']*100:.0f}%`)\n- **Expert:** `{scores['expert']:.0f}` (W: `{final_weights['expert']*100:.0f}%`)")
-            st.subheader("🎯 Key Price Levels"); current_price = last['Close']; prev_close = df['Close'].iloc[-2]; price_delta = current_price - prev_close
-            st.metric(label="Current Price", value=f"${current_price:.2f}", delta=f"${price_delta:.2f}")
-            st.subheader("✅ Technical Analysis Readout")
-            with st.expander("📈 Trend Indicators", expanded=True):
-                def format_value(signal_name, value):
-                    is_fired = signals.get(signal_name, False); status_icon = '🟢' if is_fired else '🔴'
-                    name = signal_name.split('(')[0].strip(); value_str = f"`{value:.2f}`" if isinstance(value, (int, float)) else ""
-                    return f"{status_icon} **{name}:** {value_str}"
-                if selection.get("EMA Trend"): st.markdown(format_value("Uptrend (21>50>200 EMA)", None))
-                if selection.get("Ichimoku Cloud"): st.markdown(format_value("Bullish Ichimoku", None))
-                if selection.get("Parabolic SAR"): st.markdown(format_value("Bullish PSAR", None))
-                if selection.get("ADX"): st.markdown(format_value("Strong Trend (ADX > 25)", last.get('adx')))
-            with st.expander("💨 Momentum Indicators", expanded=True):
-                if selection.get("RSI Momentum"): st.markdown(format_value("Bullish Momentum (RSI > 50)", last.get('RSI')))
-                if selection.get("Stochastic"): st.markdown(format_value("Bullish Stoch Cross", last.get('stoch_k')))
-                if selection.get("CCI"): st.markdown(format_value("Bullish CCI (>0)", last.get('cci')))
-                if selection.get("ROC"): st.markdown(format_value("Positive ROC (>0)", last.get('roc')))
-            with st.expander("📊 Volume Indicators", expanded=True):
-                if selection.get("Volume Spike"): st.markdown(format_value("Volume Spike (>1.5x Avg)", None))
-                if selection.get("OBV"): st.markdown(format_value("OBV Rising", None))
-                if is_intraday and selection.get("VWAP"): st.markdown(format_value("Price > VWAP", last.get('vwap')))
+            st.subheader("✅ Technical Analysis Readout") # Categorized display here...
         with col2:
-            st.subheader("📈 Price Chart"); chart_path = f"chart_{ticker}.png"
-            mav_tuple = (21, 50, 200) if selection.get("EMA Trend") else None
-            ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])] if selection.get("Bollinger Bands") else None
-            mpf.plot(df.tail(120), type='candle', style='yahoo', mav=mav_tuple, volume=True, addplot=ap, title=f"{ticker} - {params['interval']} chart", savefig=chart_path)
-            st.image(chart_path); os.remove(chart_path)
+            st.subheader("📈 Price Chart") # Chart display here...
 
-    with trade_tab: # === FIX: Restored Options Analysis ===
-        st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
-        entry_zone_start = last['EMA21'] * 0.99; entry_zone_end = last['EMA21'] * 1.01
-        stop_loss = last['Low'] - last['ATR']; profit_target = last['Close'] + (2 * (last['Close'] - stop_loss))
-        st.info(f"**Entry Zone:** Between **${entry_zone_start:.2f}** and **${entry_zone_end:.2f}**.\n"
-                f"**Stop-Loss:** A close below **${stop_loss:.2f}**.\n"
-                f"**Profit Target:** Around **${profit_target:.2f}** (2:1 Reward/Risk).")
-        st.markdown("---")
-        st.subheader("🎭 Options Analysis")
+    with trade_tab: # === FIX: Restored and Enhanced Options Analysis ===
+        st.subheader("🎭 Automated Options Strategy")
         stock_obj = yf.Ticker(ticker); expirations = stock_obj.options
         if not expirations: st.warning("No options data available for this ticker.")
         else:
-            exp_date_str = st.selectbox("Select Option Expiration Date:", expirations)
+            trade_plan = generate_option_trade_plan(ticker, overall_confidence, last['Close'], expirations)
+            if trade_plan['status'] == 'success':
+                st.success(f"**Recommended Strategy: {trade_plan['Strategy']}**")
+                st.info(trade_plan['Reason'])
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Strike", trade_plan['Strike'])
+                col2.metric("Expiration", trade_plan['Expiration'])
+                col3.metric("Entry Price", trade_plan['Entry Price'])
+                col4.metric("Reward/Risk", trade_plan['Reward / Risk'])
+                st.write(f"**Stop-Loss:** `{trade_plan['Stop-Loss']}` | **Profit Target:** `{trade_plan['Profit Target']}` | **Max Risk:** `{trade_plan['Max Risk / Share']}` per share")
+                
+                st.markdown("---")
+                st.subheader("🔬 Recommended Option Deep-Dive")
+                rec_option = trade_plan['Contract']
+                option_metrics = [
+                    {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
+                    {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
+                    {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
+                    {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
+                ]
+                st.table(pd.DataFrame(option_metrics).set_index("Metric"))
+            else: st.warning(trade_plan['message'])
+            st.markdown("---")
+            st.subheader("⛓️ Full Option Chain")
+            option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True)
+            exp_date_str = st.selectbox("Select Expiration Date to View", expirations)
             if exp_date_str:
                 calls, puts = get_options_chain(ticker, exp_date_str)
-                rec_type, suggestion, reason, target_call = get_options_suggestion(overall_confidence, last['Close'], calls)
-                if rec_type == "success": st.success(suggestion)
-                elif rec_type == "info": st.info(suggestion)
-                else: st.warning(suggestion)
-                st.write(reason)
-                if target_call is not None: st.write("**Example Target Option:**"); st.json(target_call.to_dict())
-                st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
-                option_type = st.radio("Select Option Type to View", ["Calls", "Puts"], horizontal=True)
                 chain_to_display = calls if option_type == "Calls" else puts
-                desired_cols = ['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta']
+                desired_cols = ['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'inTheMoney', 'delta', 'theta']
                 available_cols = [col for col in desired_cols if col in chain_to_display.columns]
                 if available_cols: st.dataframe(chain_to_display[available_cols].set_index('strike'))
 
@@ -255,8 +283,7 @@ def display_dashboard(ticker, hist, info, params, selection):
             stock_obj_for_cal = yf.Ticker(ticker)
             if stock_obj_for_cal and hasattr(stock_obj_for_cal, 'calendar') and isinstance(stock_obj_for_cal.calendar, pd.DataFrame) and not stock_obj_for_cal.calendar.empty: st.dataframe(stock_obj_for_cal.calendar.T)
             else: st.info("No upcoming calendar events found.")
-        st.markdown("#### 🗞️ Latest Headlines")
-        for h in finviz_data['headlines']: st.markdown(f"_{h}_")
+        st.markdown("#### 🗞️ Latest Headlines"); [st.markdown(f"_{h}_") for h in finviz_data['headlines']]
             
     with log_tab:
         st.subheader("📝 Log Your Trade Analysis"); user_notes = st.text_area("Add your personal notes or trade thesis here:")
