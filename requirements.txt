@@ -1,3 +1,5 @@
+# requirements.txt
+beautifulsoup4
 streamlit>=1.22.0
 yfinance>=0.2.18
 ta>=0.10.2
