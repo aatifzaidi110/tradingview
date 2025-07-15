@@ -2,6 +2,11 @@
 import os
 print("Current working directory:", os.getcwd())
 print("Directory contents:", os.listdir())
+print("=== DEBUG INFO ===")
+print("Current directory:", os.getcwd())
+print("Directory contents:", os.listdir())
+print("Python path:", sys.path)
+print("=================")
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt # Needed for plt.close() in display_components
