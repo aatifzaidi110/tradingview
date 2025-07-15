@@ -70,7 +70,7 @@ def get_finviz_data(ticker):
             recom_tag = soup.find('td', text='Recom')
             analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
             headlines = [tag.text for tag in soup.findAll('a', class_='news-link-left')[:10]]
-            analyzer = SentimentIntensityA nalyser()
+            analyzer = SentimentIntensityAnalyser()
             compound_scores = [analyzer.polarity_scores(h)['compound'] for h in headlines]
             avg_compound = sum(compound_scores) / len(compound_scores) if compound_scores else 0
             return {"recom": analyst_recom, "headlines": headlines, "sentiment_compound": avg_compound}
