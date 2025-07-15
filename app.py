@@ -22,7 +22,6 @@ LOG_FILE = "trade_log.csv"
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
 ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
-# FIX: Re-added all trading styles
 timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
@@ -34,7 +33,6 @@ indicator_selection = {
     "Bollinger Bands": st.sidebar.checkbox("Bollinger Bands Display", value=True)
 }
 
-# FIX: Re-added automation toggle
 st.sidebar.header("🧠 Qualitative Scores")
 use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help="ON: Scrape Finviz for scores. OFF: Use manual sliders.")
 auto_sentiment_score_placeholder = st.sidebar.empty()
@@ -62,20 +60,23 @@ if use_automation:
     finviz_data = get_finviz_data(ticker)
     auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
     auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
-    auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}` (from headlines)")
+    auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
     auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
     sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
     expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
 else:
     st.sidebar.info("Automation is OFF. Using manual sliders.")
-    sentiment_score = st.sidebar.slider("Manual Sentiment Score (1-100)", 1, 100, 50)
-    expert_score = st.sidebar.slider("Manual Expert Score (1-100)", 1, 100, 50)
-    finviz_data = {"headlines": ["Automation is disabled."]} # Placeholder
+    sentiment_score = st.sidebar.slider("Manual Sentiment Score", 1, 100, 50)
+    expert_score = st.sidebar.slider("Manual Expert Score", 1, 100, 50)
+    finviz_data = {"headlines": ["Automation is disabled."]}
 
+# === FIX: Corrected get_data function ===
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
-    stock = yf.Ticker(symbol); hist = stock.history(period=period, interval=interval, auto_adjust=True)
-    return (hist, stock.info, stock) if not hist.empty else (None, None, None)
+    """This cached function now ONLY returns pickle-serializable objects (DataFrame, dict)."""
+    stock = yf.Ticker(symbol)
+    hist = stock.history(period=period, interval=interval, auto_adjust=True)
+    return (hist, stock.info) if not hist.empty else (None, None)
 
 @st.cache_data(ttl=300)
 def get_options_chain(ticker, expiry_date):
@@ -97,7 +98,6 @@ def generate_signals(last_row, selection):
     if selection.get("Volume Spike"): signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
     return signals
 
-# FIX: Re-added Option Strategy Recommendation Logic
 def get_options_suggestion(confidence, current_price, calls):
     if confidence >= 75:
         suggestion = "💡 **Strategy Suggestion: Buy an ITM Call.**"; reason = "High confidence suggests a strong directional move. An ITM call (Delta > 0.60) has a higher probability of success."
@@ -116,7 +116,7 @@ def log_analysis(log_data):
     log_df.to_csv(LOG_FILE, mode='a', header=not file_exists, index=False)
     st.success(f"Analysis logged to `{LOG_FILE}`!")
 
-def display_dashboard(ticker, hist, info, stock_obj, params, selection):
+def display_dashboard(ticker, hist, info, params, selection):
     df = calculate_indicators(hist.copy()); last = df.iloc[-1]
     signals = generate_signals(last, selection)
     
@@ -146,7 +146,7 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
             mpf.plot(df.tail(120), type='candle', style='yahoo', mav=mav_tuple, volume=True, addplot=ap, title=f"{ticker} - {params['interval']} chart", savefig=chart_path)
             st.image(chart_path); os.remove(chart_path)
 
-    with trade_tab: # FIX: Re-integrated full trade plan and options analysis
+    with trade_tab:
         st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
         entry_zone_start = last['EMA21'] * 0.99; entry_zone_end = last['EMA21'] * 1.01
         stop_loss = last['Low'] - last['ATR']; profit_target = last['Close'] + (2 * (last['Close'] - stop_loss))
@@ -156,6 +156,7 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
         st.markdown("---")
 
         st.subheader("🎭 Options Analysis")
+        stock_obj = yf.Ticker(ticker)
         expirations = stock_obj.options
         if not expirations:
             st.warning("No options data available for this ticker.")
@@ -177,10 +178,9 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
                 
                 desired_cols = ['strike', 'lastPrice', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta']
                 available_cols = [col for col in desired_cols if col in chain_to_display.columns]
-                if available_cols:
-                    st.dataframe(chain_to_display[available_cols].set_index('strike'))
+                if available_cols: st.dataframe(chain_to_display[available_cols].set_index('strike'))
 
-    with guide_tab: # FIX: Corrected display logic for indicator guide
+    with guide_tab: # FIX: Corrected display logic
         st.subheader("📘 Dynamic Indicator Guide"); st.info("This guide explains the indicators you have selected.")
         guide_data = []
         if selection.get("EMA Trend"): guide_data.append({"Indicator": "EMA Trend", "Description": "Shows trend alignment. Stacked EMAs (21>50>200) confirm a strong uptrend.", "Current Value": f"21: {last['EMA21']:.2f}", "Ideal Bullish": "21 > 50 > 200", "Status": '🟢' if signals.get("Uptrend (21>50>200 EMA)") else '🔴'})
@@ -188,10 +188,8 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
         if selection.get("MACD Crossover"): guide_data.append({"Indicator": "MACD Diff", "Description": "Highlights momentum direction. Positive value = bullish.", "Current Value": f"{last['MACD_diff']:.2f}", "Ideal Bullish": "> 0", "Status": '🟢' if signals.get("MACD Bullish (Diff > 0)") else '🔴'})
         if selection.get("Volume Spike"): guide_data.append({"Indicator": "Volume", "Description": "Confirms conviction via institutional interest.", "Current Value": f"{last['Volume']:,.0f}", "Ideal Bullish": f"> {last['Vol_Avg_50']:,.0f}", "Status": '🟢' if signals.get("Volume Spike (>1.5x Avg)") else '🔴'})
         
-        if guide_data:
-            st.table(pd.DataFrame(guide_data).set_index("Indicator"))
-        else:
-            st.warning("No indicators have been selected from the sidebar to display in the guide.")
+        if guide_data: st.table(pd.DataFrame(guide_data).set_index("Indicator"))
+        else: st.warning("No indicators have been selected from the sidebar to display in the guide.")
 
     with news_tab:
         st.subheader(f"📰 News & Information for {ticker}")
@@ -204,10 +202,10 @@ def display_dashboard(ticker, hist, info, stock_obj, params, selection):
             st.markdown("#### 🔗 External Research Links")
             st.markdown(f"- [Yahoo Finance]({info.get('website', 'https://finance.yahoo.com')}) | [Finviz](https://finviz.com/quote.ashx?t={ticker})")
             st.markdown("#### 📅 Company Calendar")
-            if stock_obj and stock_obj.calendar is not None and not stock_obj.calendar.empty:
-                st.dataframe(stock_obj.calendar.T)
-            else:
-                st.info("No upcoming calendar events found.")
+            stock_obj_for_cal = yf.Ticker(ticker)
+            if stock_obj_for_cal and stock_obj_for_cal.calendar is not None and not stock_obj_for_cal.calendar.empty:
+                st.dataframe(stock_obj_for_cal.calendar.T)
+            else: st.info("No upcoming calendar events found.")
             
     with log_tab:
         st.subheader("📝 Log Your Trade Analysis"); user_notes = st.text_area("Add your personal notes or trade thesis here:")
@@ -231,9 +229,9 @@ selected_params_main = TIMEFRAME_MAP[timeframe]
 
 if ticker:
     try:
-        hist_data, info_data, stock_object = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
+        hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
         if hist_data is None: st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval.")
-        else: display_dashboard(ticker, hist_data, info_data, stock_object, selected_params_main, indicator_selection)
+        else: display_dashboard(ticker, hist_data, info_data, selected_params_main, indicator_selection)
     except Exception as e:
         st.error(f"An error occurred: {e}")
 else:
