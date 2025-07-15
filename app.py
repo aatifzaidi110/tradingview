@@ -1,9 +1,10 @@
 # app.py
-
+import os
+print("Current working directory:", os.getcwd())
+print("Directory contents:", os.listdir())
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt # Needed for plt.close() in display_components
-import os # For LOG_FILE constant
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,10 +15,14 @@ from utils import (
     generate_signals_for_row, backtest_strategy,
     generate_option_trade_plan, convert_compound_to_100_scale, EXPERT_RATING_MAP
 )
-from display_components import (
-    display_main_analysis_tab, display_trade_plan_options_tab,
-    display_backtest_tab, display_news_info_tab, display_trade_log_tab
-)
+try:
+    from display_components import (
+        display_main_analysis_tab, display_trade_plan_options_tab,
+        display_backtest_tab, display_news_info_tab, display_trade_log_tab
+    )
+except ImportError as e:
+    print("Import error details:", str(e))
+    raise
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
