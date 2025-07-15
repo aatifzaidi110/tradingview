@@ -4,124 +4,113 @@
 
 import streamlit as st
 import pandas as pd
-import yfinance as yf
-import nltkTrue),
-        # ... other checkboxes
-    }
-# ... other expanders
+import yfinance as_trade:
+            row = df_historical.iloc[i-1]
+            if pd.isna(row.get('EMA200')): continue
+            signals = generate_signals_for_row(row, yf
+import nltk
+import ssl
 
-st.sidebar.header("🧠 Qualitative Scores")
+# Import functions from our utility modules
+from utils import (get_hist_and_info, calculate_indicators, generate_signals_for_row, 
+                   EXPERT_RATING selection, df_historical.iloc[:i])
+            if signals and all(signals.values()):
+                entry_MAP, convert_compound_to_100_scale, get_finviz_data, LOG__price = df_historical['Open'].iloc[i]
+                stop_loss = entry_price - (FILE)
+from display_components import display_main_analysis_tab, display_trade_log_tab
+
+row['ATR'] * atr_multiplier); take_profit = entry_price + (row['ATR'] * atr_multiplier *# === NLTK Data Download Workaround ===
+@st.cache_resource
+def download_nltk_data():
+ reward_risk_ratio)
+                trades.append({"Date": df_historical.index[i].strftime('%Y-%m-%d'), "Type": "Entry", "Price": entry_price}); in_trade = True    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+
+    wins = len([t for t in trades if t['Type'] == 'Exit (Win)']); losses = len    except AttributeError: pass
+    else: ssl._create_default_https_context = _create_unverified_https_context
+    try: nltk.data.find('sentiment/vader_lexicon.zip')([t for t in trades if t['Type'] == 'Exit (Loss)'])
+    return trades, wins
+    except LookupError: nltk.download('vader_lexicon')
+
+download_nltk_data()
+
+# === Page Setup ===
+st.set_page_config(page_title="Aatif's AI Trading, losses
+
+def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
+    if confidence < 60: return {"status": "warning", "message": "Confidence score is too low."}
+    today Hub", layout="wide")
+st.title("🚀 Aatif's AI-Powered Trading Hub")
+
+# === SIDEBAR ===
+st.sidebar.header("⚙️ Controls")
+ticker = st.sidebar.text_input(" = datetime.now()
+    target_exp_date = next((exp for exp in expirations if 45 <= (datetime.strptime(exp, '%Y-%m-%d') - today).days <= 90), NoneEnter a Ticker Symbol", value="NVDA").upper()
+TIMEFRAME_MAP = {
+    "Swing Trading": {"period": "1y", "interval": "1d", "weights": {"technical":)
+    if not target_exp_date: return {"status": "warning", "message": "No suitable expiration found (45-90 days)."}
+    
+    calls, _ = get_options_chain(ticker 0.6, "sentiment": 0.2, "expert": 0.2}},
+    ", target_exp_date)
+    if calls.empty: return {"status": "error", "message": f"No call options for {target_exp_date}."}
+    
+    strategy = "Buy ATMPosition Trading": {"period": "5y", "interval": "1wk", "weights": {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}}
+}
+time Call"; reason = "Moderate confidence favors an At-the-Money call to balance cost and potential."
+    target_options = calls.iloc[[(calls['strike'] - stock_price).abs().idxmin()]]
+frame = st.sidebar.radio("Choose Trading Style:", list(TIMEFRAME_MAP.keys()), index=0)
+
+st.sidebar.header("🔧 Technical Indicator Selection")
+with st.sidebar.expander("Trend Indicators", expanded=True):
+    indicator_selection = {
+        "EMA Trend": st.checkbox("    if confidence >= 75:
+        strategy = "Buy ITM Call"; reason = "High confidence suggestsEMA Trend (21, 50, 200)", value=True),
+    }
+with st.sidebar.expander("Display-Only Indicators"):
+    indicator_selection.update({"Bollinger Bands": st.checkbox("Bollinger Bands Display", value=True)})
+
+st.sidebar.header("🧠 Qualitative Scores") a directional play. An ITM call (Delta > 0.60) offers good leverage."
+        itm_options = calls[(calls['inTheMoney']) & (calls.get('delta', 0) > 0.60)]
 use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help="ON: AI scores are used. OFF: Only technical score counts.")
 auto_sentiment_score_placeholder = st.sidebar.empty()
 auto_expert_score_placeholder = st.sidebar.empty()
 
 # === Main Logic ===
-if
-import ssl
-
-# Import functions from our utility modules
-from utils import (get_hist_and_info, calculate_indicators, generate_signals_for_row, 
-                   EXPERT_RATING_MAP, convert_compound_to_100_scale, get_finviz_data, LOG_FILE)
-from ticker:
-    selected_params = TIMEFRAME_MAP[timeframe]
-    hist_data, info_data = get_hist_and_info(ticker, selected_params['period'], selected_params[' display_components import display_main_analysis_tab, display_trade_log_tab
-
-# === NLTK Data Download Workaround ===
-@st.cache_resource
-def download_nltk_data():
-    try:
-interval'])
-
-    if hist_data is None:
-        st.error(f"Could not fetch data for {ticker}. Please check the symbol or try again later.")
-    else:
-        # --- Qualitative Score Calculation ---
-        if        _create_unverified_https_context = ssl._create_unverified_context
-    except AttributeError: pass
-    else: ssl._create_default_https_context = _create_unverified_https_context
-    try: nltk.data.find('sentiment/vader_lexicon.zip')
-    except Lookup use_automation:
-            finviz_data = get_finviz_data(ticker)
-            auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compoundError: nltk.download('vader_lexicon')
-
-download_nltk_data()
-
-# === Page Setup ===
-st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")'])
-            auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
-            auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
-            auto_expert_score_placeholder.markdown(f"
-st.title("🚀 Aatif's AI-Powered Trading Hub")
-
-# === SIDEBAR ===
-st.sidebar.header("⚙️ Controls")
-ticker = st.sidebar.text_input("Enter a Ticker**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
-            sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
-            expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
-        else:
-            st.sidebar. Symbol", value="NVDA").upper()
-TIMEFRAME_MAP = {
-    "Swing Trading": {"period": "1y", "interval": "1d", "weights": {"technical": 0.6, "sentiment": 0.2, "expert": 0.2}},
-    "Position Trading": {"period": "5yinfo("Automation OFF. Using manual scores."); sentiment_score = 50; expert_score = 50; finviz_data = {"headlines": []}
-
-        df_calculated = calculate_indicators(hist_data.copy(), selected_params['interval'] in ['5m', '60m'])
-        signals = generate_signals_for", "interval": "1wk", "weights": {"technical": 0.4, "sentiment": 0.2, "expert": 0.4}}
-}
-timeframe = st.sidebar.radio("Choose Trading Style:", list(TIMEFRAME_MAP.keys()), index=0)
-
-st.sidebar.header_row(df_calculated.iloc[-1], indicator_selection, df_calculated, selected_params['interval'] in ['5m', '60m'])
-        
-        technical_score = (sum(1 for("🔧 Technical Indicator Selection")
-with st.sidebar.expander("Trend Indicators", expanded=True):
-    indicator_selection = {
-        "EMA Trend": st.checkbox("EMA Trend (21, 50 f in signals.values() if f) / len(signals)) * 100 if signals else 0, 200)", value=True),
-    }
-with st.sidebar.expander("Display-
-        scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
-        
-        final_weights = selected_params['weights'].copy()
-        if not use_automation: finalOnly Indicators"):
-    indicator_selection.update({"Bollinger Bands": st.checkbox("Bollinger Bands Display",_weights = {'technical': 1.0, 'sentiment': 0.0, 'expert': 0 value=True)})
-
-st.sidebar.header("🧠 Qualitative Scores")
-use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help="ON: AI scores are used. OFF: Only technical score counts.").0}; scores['sentiment'], scores['expert'] = 0, 0
-        
-        overall_confidence = min(
-auto_sentiment_score_placeholder = st.sidebar.empty()
-auto_expert_score_placeholder =round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
-        
-        display_params = {'ticker': ticker, 'interval': selected_params['interval']}
-        
-        tab st.sidebar.empty()
-
-# === Main Logic ===
-if ticker:
+if ticker
+        if not itm_options.empty: target_options = itm_options
+    
+    if target_options.empty: return {"status": "error", "message": "Could not find a suitable option contract."}
+    
+    rec_option = target_options.iloc[0]
+    entry_price =:
     selected_params = TIMEFRAME_MAP[timeframe]
     hist_data, info_data = get_hist_and_info(ticker, selected_params['period'], selected_params['interval'])
 
-    if hist_data is None:
+     rec_option.get('ask', rec_option.get('lastPrice', 0))
+    if entry_price == 0: entry_price = rec_option.get('lastPrice')
+    if not isinstance(entry_price, (int, float)) or entry_price == 0: return {"status": "error",if hist_data is None:
         st.error(f"Could not fetch data for {ticker}. Please check the symbol or try again later.")
-_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-        main_tab, trade_tab, backtest_tab, news_    else:
+    else:
         # Qualitative Score Calculation
         if use_automation:
-            finviz_data = get_finviz_data(ticker)
+             "message": "Could not determine a valid entry price for the option."}
+    
+    risk_per_share = entry_price * 0.50; stop_loss = entry_price - risk_per_share; profit_target = entry_price + (risk_per_share * 2)
+    return {"finviz_data = get_finviz_data(ticker)
             auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
-            auto_expert_score = EXPERT_tab, log_tab = st.tabs(tab_list)
+            auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
+status": "success", "Strategy": strategy, "Reason": reason, "Expiration": target_exp_date,
+            "Strike": f"${rec_option['strike']:.2f}", "Entry Price": f"~${entry_price:.2            auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
+            auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
+            sentiment_score = st.f}",
+            "Stop-Loss": f"~${stop_loss:.2f}", "Profit Target": f"~${profit_target:.2f}",
+            "Max Risk / Share": f"${risk_persidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
+            expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto__share:.2f}", "Reward / Risk": "2 to 1", "Contract": rec_option}
 
-        with main_tab:
-            display_main_analysis_tab(signals, df_calculated, indicator_selection, display_params, overall_confidence, scores, final_weights)
-        with trade_tab:
-            display_trade_plan_options_RATING_MAP.get(finviz_data['recom'], 50)
-            auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
-            auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_scoretab(ticker, df_calculated, overall_confidence)
-        with backtest_tab:
-            display_backtest_tab(ticker, indicator_selection)
-        with news_tab:
-            display_news_info_tab(ticker, info_data, finviz_data)
-        with log_tab:
-            }` ({finviz_data['recom']})")
-            sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
-            expert_scoredisplay_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
-else:
-    st.info("Please enter a stock ticker in the sidebar to begin analysis.")
+def log_analysis(log_file, log_data):
+    log_df = pd.DataFrame([log_dataexpert_score)
+        else:
+            st.sidebar.info("Automation OFF. Using manual scores."); sentiment_score = 50; expert_score = 50; finviz_data = {"headlines": []])
+    file_exists = os.path.isfile(log_file)
+    log_df.to_csv(log_file, mode='a', header=not file_exists, index=False)
+    st.success(f"Analysis for {log_data['Ticker']} logged successfully!")
