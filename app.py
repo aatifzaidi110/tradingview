@@ -90,36 +90,28 @@ def get_data(symbol, period, interval):
     return (hist, stock.info) if not hist.empty else (None, None)
 
 def calculate_indicators(df, is_intraday=False):
-    """Calculates all indicators robustly with error handling."""
-    # Trend
     try: df["EMA21"]=ta.trend.ema_indicator(df["Close"],21); df["EMA50"]=ta.trend.ema_indicator(df["Close"],50); df["EMA200"]=ta.trend.ema_indicator(df["Close"],200)
-    except Exception as e: st.warning(f"Could not calculate EMAs. Error: {e}", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate EMAs: {e}", icon="⚠️")
     try: ichimoku = ta.trend.IchimokuIndicator(df['High'], df['Low']); df['ichimoku_a'] = ichimoku.ichimoku_a(); df['ichimoku_b'] = ichimoku.ichimoku_b()
-    except Exception as e: st.warning(f"Could not calculate Ichimoku. Error: {e}", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate Ichimoku: {e}", icon="⚠️")
     try: df['psar'] = ta.trend.PSARIndicator(df['High'], df['Low'], df['Close']).psar()
-    except Exception as e: st.warning(f"Could not calculate Parabolic SAR. Error: {e}", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate Parabolic SAR: {e}", icon="⚠️")
     try: df['adx'] = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close']).adx()
-    except Exception as e: st.warning(f"Could not calculate ADX. Error: {e}", icon="⚠️")
-    # Momentum
+    except Exception as e: st.warning(f"Could not calculate ADX: {e}", icon="⚠️")
     try: df["RSI"]=ta.momentum.RSIIndicator(df["Close"]).rsi()
-    except Exception as e: st.warning(f"Could not calculate RSI. Error: {e}", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate RSI: {e}", icon="⚠️")
     try: stoch = ta.momentum.StochasticOscillator(df['High'], df['Low'], df['Close']); df['stoch_k'] = stoch.stoch(); df['stoch_d'] = stoch.stoch_signal()
-    except Exception as e: st.warning(f"Could not calculate Stochastic. Error: {e}", icon="⚠️")
-    # === FIX: Corrected error handling for CCI ===
+    except Exception as e: st.warning(f"Could not calculate Stochastic: {e}", icon="⚠️")
     try: df['cci'] = ta.momentum.cci(df['High'], df['Low'], df['Close'])
-    except AttributeError:
-        st.warning("CCI indicator failed. Your `ta` library might be outdated. Try `pip install --upgrade ta`.", icon="⚠️")
-        df['cci'] = 0
-    except Exception as e: st.warning(f"Could not calculate CCI. Error: {e}", icon="⚠️")
+    except AttributeError: st.warning("CCI indicator failed. Your `ta` library might be outdated. Try `pip install --upgrade ta`.", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate CCI: {e}", icon="⚠️")
     try: df['roc'] = ta.momentum.ROCIndicator(df['Close']).roc()
-    except Exception as e: st.warning(f"Could not calculate ROC. Error: {e}", icon="⚠️")
-    # Volume
+    except Exception as e: st.warning(f"Could not calculate ROC: {e}", icon="⚠️")
     try: df['obv'] = ta.volume.OnBalanceVolumeIndicator(df['Close'], df['Volume']).on_balance_volume()
-    except Exception as e: st.warning(f"Could not calculate OBV. Error: {e}", icon="⚠️")
+    except Exception as e: st.warning(f"Could not calculate OBV: {e}", icon="⚠️")
     if is_intraday:
         try: df['vwap'] = ta.volume.VolumeWeightedAveragePrice(df['High'], df['Low'], df['Close'], df['Volume']).volume_weighted_average_price()
-        except Exception as e: st.warning(f"Could not calculate VWAP. Error: {e}", icon="⚠️")
-    # Volatility & Others
+        except Exception as e: st.warning(f"Could not calculate VWAP: {e}", icon="⚠️")
     df["ATR"]=ta.volatility.AverageTrueRange(df["High"],df["Low"],df["Close"]).average_true_range()
     bb=ta.volatility.BollingerBands(df["Close"]); df["BB_low"]=bb.bollinger_lband(); df["BB_high"]=bb.bollinger_hband()
     df["Vol_Avg_50"]=df["Volume"].rolling(50).mean()
@@ -131,25 +123,30 @@ def calculate_pivot_points(df):
     r1 = (2 * pp) - df['Low']; r2 = pp + (df['High'] - df['Low'])
     return pd.DataFrame({'S2':s2, 'S1':s1, 'Pivot':pp, 'R1':r1, 'R2':r2})
 
-def generate_signals(last_row, selection, is_intraday=False):
-    signals = {}
-    if selection.get("EMA Trend") and 'EMA50' in last_row: signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
-    if selection.get("Ichimoku Cloud") and 'ichimoku_a' in last_row: signals["Bullish Ichimoku"] = last_row['Close'] > last_row['ichimoku_a'] and last_row['Close'] > last_row['ichimoku_b']
-    if selection.get("Parabolic SAR") and 'psar' in last_row: signals["Bullish PSAR"] = last_row['Close'] > last_row['psar']
-    if selection.get("ADX") and 'adx' in last_row: signals["Strong Trend (ADX > 25)"] = last_row['adx'] > 25
-    if selection.get("RSI Momentum") and 'RSI' in last_row: signals["Bullish Momentum (RSI > 50)"] = last_row["RSI"] > 50
-    if selection.get("Stochastic") and 'stoch_k' in last_row: signals["Bullish Stoch Cross"] = last_row['stoch_k'] > last_row['stoch_d']
-    if selection.get("CCI") and 'cci' in last_row: signals["Bullish CCI (>0)"] = last_row['cci'] > 0
-    if selection.get("ROC") and 'roc' in last_row: signals["Positive ROC (>0)"] = last_row['roc'] > 0
-    if selection.get("Volume Spike") and 'Vol_Avg_50' in last_row: signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
-    if selection.get("OBV") and 'obv' in last_row: signals["OBV Rising"] = last_row['obv'] > last_row['obv'].rolling(10).mean()
-    if selection.get("VWAP") and is_intraday and 'vwap' in last_row: signals["Price > VWAP"] = last_row['Close'] > last_row['vwap']
+def generate_signals(df, selection, is_intraday=False):
+    """Generates signals based on the last row of the DataFrame."""
+    signals = {}; last_row = df.iloc[-1]
+    # === FIX: Corrected OBV signal calculation ===
+    if selection.get("OBV") and 'obv' in df.columns and len(df) > 10:
+        signals["OBV Rising"] = last_row['obv'] > df['obv'].rolling(10).mean().iloc[-1]
+    
+    if selection.get("EMA Trend"): signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
+    if selection.get("Ichimoku Cloud"): signals["Bullish Ichimoku"] = last_row['Close'] > last_row['ichimoku_a'] and last_row['Close'] > last_row['ichimoku_b']
+    if selection.get("Parabolic SAR"): signals["Bullish PSAR"] = last_row['Close'] > last_row['psar']
+    if selection.get("ADX"): signals["Strong Trend (ADX > 25)"] = last_row['adx'] > 25
+    if selection.get("RSI Momentum"): signals["Bullish Momentum (RSI > 50)"] = last_row["RSI"] > 50
+    if selection.get("Stochastic"): signals["Bullish Stoch Cross"] = last_row['stoch_k'] > last_row['stoch_d']
+    if selection.get("CCI") and 'cci' in df.columns: signals["Bullish CCI (>0)"] = last_row['cci'] > 0
+    if selection.get("ROC"): signals["Positive ROC (>0)"] = last_row['roc'] > 0
+    if selection.get("Volume Spike"): signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
+    if selection.get("VWAP") and is_intraday: signals["Price > VWAP"] = last_row['Close'] > last_row['vwap']
     return signals
 
 def display_dashboard(ticker, hist, info, params, selection):
     is_intraday = params['interval'] in ['5m', '60m']
-    df = calculate_indicators(hist.copy(), is_intraday); last = df.iloc[-1]
-    signals = generate_signals(last, selection, is_intraday)
+    df = calculate_indicators(hist.copy(), is_intraday)
+    signals = generate_signals(df, selection, is_intraday) # Pass the full df
+    last = df.iloc[-1]
     
     technical_score = (sum(1 for f in signals.values() if f) / len(signals)) * 100 if signals else 0
     scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
