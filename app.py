@@ -132,9 +132,9 @@ def display_dashboard(ticker, data, params, selection):
 
     with backtest_tab:
         st.subheader(f"🧪 Historical Backtest for {ticker}"); st.info(f"Simulating trades based on your **currently selected indicators**.")
-        daily_hist = get_all_data(ticker, "2y", "1d")['hist']
-        if daily_hist is not None:
-            daily_df = calculate_indicators(daily_hist.copy()); trades, wins, losses = backtest_strategy(daily_df, selection)
+        daily_hist_data = get_all_data(ticker, "2y", "1d")
+        if daily_hist_data and daily_hist_data['hist'] is not None:
+            daily_df = calculate_indicators(daily_hist_data['hist'].copy()); trades, wins, losses = backtest_strategy(daily_df, selection)
             total_trades = wins + losses; win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
             col1, col2, col3 = st.columns(3); col1.metric("Trades Simulated", total_trades); col2.metric("Wins", wins); col3.metric("Win Rate", f"{win_rate:.1f}%")
             if trades: st.dataframe(pd.DataFrame(trades).tail(20))
