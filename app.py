@@ -25,12 +25,12 @@ ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
 timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
-with st.sidebar.expander("Trend Indicators"):
+with st.sidebar.expander("Trend Indicators", expanded=True):
     indicator_selection = {
         "EMA Trend": st.checkbox("EMA Trend (21, 50, 200)", value=True),
         "Ichimoku Cloud": st.checkbox("Ichimoku Cloud", value=True),
         "Parabolic SAR": st.checkbox("Parabolic SAR", value=True),
-        "ADX": st.checkbox("ADX", value=True, help="Measures trend strength, not direction."),
+        "ADX": st.checkbox("ADX", value=True),
     }
 with st.sidebar.expander("Momentum & Volume Indicators"):
     indicator_selection.update({
@@ -40,14 +40,13 @@ with st.sidebar.expander("Momentum & Volume Indicators"):
         "ROC": st.checkbox("Rate of Change (ROC)", value=True),
         "Volume Spike": st.checkbox("Volume Spike", value=True),
         "OBV": st.checkbox("On-Balance Volume (OBV)", value=True),
-        "VWAP": st.checkbox("VWAP", value=True, help="Only available on intraday timeframes."),
+        "VWAP": st.checkbox("VWAP (Intraday only)", value=True),
     })
 with st.sidebar.expander("Display-Only Indicators"):
     indicator_selection.update({
         "Bollinger Bands": st.checkbox("Bollinger Bands Display", value=True),
-        "Pivot Points": st.checkbox("Pivot Points Display", value=True),
+        "Pivot Points": st.checkbox("Pivot Points Display (Daily only)", value=True),
     })
-
 
 st.sidebar.header("🧠 Qualitative Scores")
 use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help="ON: AI scores are used. OFF: Use manual sliders and only the Technical Score will count.")
@@ -91,43 +90,60 @@ def get_data(symbol, period, interval):
     return (hist, stock.info) if not hist.empty else (None, None)
 
 def calculate_indicators(df, is_intraday=False):
+    """Calculates all indicators robustly with error handling."""
     # Trend
-    df["EMA21"]=ta.trend.ema_indicator(df["Close"],21); df["EMA50"]=ta.trend.ema_indicator(df["Close"],50); df["EMA200"]=ta.trend.ema_indicator(df["Close"],200)
-    ichimoku = ta.trend.IchimokuIndicator(df['High'], df['Low']); df['ichimoku_a'] = ichimoku.ichimoku_a(); df['ichimoku_b'] = ichimoku.ichimoku_b()
-    df['psar'] = ta.trend.PSARIndicator(df['High'], df['Low'], df['Close']).psar()
-    adx_indicator = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close']); df['adx'] = adx_indicator.adx()
+    try: df["EMA21"]=ta.trend.ema_indicator(df["Close"],21); df["EMA50"]=ta.trend.ema_indicator(df["Close"],50); df["EMA200"]=ta.trend.ema_indicator(df["Close"],200)
+    except Exception as e: st.warning(f"Could not calculate EMAs. Error: {e}", icon="⚠️")
+    try: ichimoku = ta.trend.IchimokuIndicator(df['High'], df['Low']); df['ichimoku_a'] = ichimoku.ichimoku_a(); df['ichimoku_b'] = ichimoku.ichimoku_b()
+    except Exception as e: st.warning(f"Could not calculate Ichimoku. Error: {e}", icon="⚠️")
+    try: df['psar'] = ta.trend.PSARIndicator(df['High'], df['Low'], df['Close']).psar()
+    except Exception as e: st.warning(f"Could not calculate Parabolic SAR. Error: {e}", icon="⚠️")
+    try: df['adx'] = ta.trend.ADXIndicator(df['High'], df['Low'], df['Close']).adx()
+    except Exception as e: st.warning(f"Could not calculate ADX. Error: {e}", icon="⚠️")
     # Momentum
-    df["RSI"]=ta.momentum.RSIIndicator(df["Close"]).rsi()
-    stoch = ta.momentum.StochasticOscillator(df['High'], df['Low'], df['Close']); df['stoch_k'] = stoch.stoch(); df['stoch_d'] = stoch.stoch_signal()
-    df['cci'] = ta.momentum.CCIIndicator(df['High'], df['Low'], df['Close']).cci()
-    df['roc'] = ta.momentum.ROCIndicator(df['Close']).roc()
+    try: df["RSI"]=ta.momentum.RSIIndicator(df["Close"]).rsi()
+    except Exception as e: st.warning(f"Could not calculate RSI. Error: {e}", icon="⚠️")
+    try: stoch = ta.momentum.StochasticOscillator(df['High'], df['Low'], df['Close']); df['stoch_k'] = stoch.stoch(); df['stoch_d'] = stoch.stoch_signal()
+    except Exception as e: st.warning(f"Could not calculate Stochastic. Error: {e}", icon="⚠️")
+    # === FIX: Corrected error handling for CCI ===
+    try: df['cci'] = ta.momentum.cci(df['High'], df['Low'], df['Close'])
+    except AttributeError:
+        st.warning("CCI indicator failed. Your `ta` library might be outdated. Try `pip install --upgrade ta`.", icon="⚠️")
+        df['cci'] = 0
+    except Exception as e: st.warning(f"Could not calculate CCI. Error: {e}", icon="⚠️")
+    try: df['roc'] = ta.momentum.ROCIndicator(df['Close']).roc()
+    except Exception as e: st.warning(f"Could not calculate ROC. Error: {e}", icon="⚠️")
     # Volume
-    df["Vol_Avg_50"]=df["Volume"].rolling(50).mean(); df['obv'] = ta.volume.OnBalanceVolumeIndicator(df['Close'], df['Volume']).on_balance_volume()
-    if is_intraday: df['vwap'] = ta.volume.VolumeWeightedAveragePrice(df['High'], df['Low'], df['Close'], df['Volume']).volume_weighted_average_price()
-    # Volatility
+    try: df['obv'] = ta.volume.OnBalanceVolumeIndicator(df['Close'], df['Volume']).on_balance_volume()
+    except Exception as e: st.warning(f"Could not calculate OBV. Error: {e}", icon="⚠️")
+    if is_intraday:
+        try: df['vwap'] = ta.volume.VolumeWeightedAveragePrice(df['High'], df['Low'], df['Close'], df['Volume']).volume_weighted_average_price()
+        except Exception as e: st.warning(f"Could not calculate VWAP. Error: {e}", icon="⚠️")
+    # Volatility & Others
     df["ATR"]=ta.volatility.AverageTrueRange(df["High"],df["Low"],df["Close"]).average_true_range()
     bb=ta.volatility.BollingerBands(df["Close"]); df["BB_low"]=bb.bollinger_lband(); df["BB_high"]=bb.bollinger_hband()
+    df["Vol_Avg_50"]=df["Volume"].rolling(50).mean()
     return df
 
 def calculate_pivot_points(df):
     pp = (df['High'] + df['Low'] + df['Close']) / 3
-    s1 = (2 * pp) - df['High']; s2 = pp - (df['High'] - df['Low']); s3 = df['Low'] - 2 * (df['High'] - pp)
-    r1 = (2 * pp) - df['Low']; r2 = pp + (df['High'] - df['Low']); r3 = df['High'] + 2 * (pp - df['Low'])
-    return pd.DataFrame({'S3':s3, 'S2':s2, 'S1':s1, 'Pivot':pp, 'R1':r1, 'R2':r2, 'R3':r3})
+    s1 = (2 * pp) - df['High']; s2 = pp - (df['High'] - df['Low'])
+    r1 = (2 * pp) - df['Low']; r2 = pp + (df['High'] - df['Low'])
+    return pd.DataFrame({'S2':s2, 'S1':s1, 'Pivot':pp, 'R1':r1, 'R2':r2})
 
 def generate_signals(last_row, selection, is_intraday=False):
     signals = {}
-    if selection.get("EMA Trend"): signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
-    if selection.get("Ichimoku Cloud"): signals["Bullish Ichimoku"] = last_row['Close'] > last_row['ichimoku_a'] and last_row['Close'] > last_row['ichimoku_b']
-    if selection.get("Parabolic SAR"): signals["Bullish PSAR"] = last_row['Close'] > last_row['psar']
-    if selection.get("ADX"): signals["Strong Trend (ADX > 25)"] = last_row['adx'] > 25
-    if selection.get("RSI Momentum"): signals["Bullish Momentum (RSI > 50)"] = last_row["RSI"] > 50
-    if selection.get("Stochastic"): signals["Bullish Stoch Cross"] = last_row['stoch_k'] > last_row['stoch_d']
-    if selection.get("CCI"): signals["Bullish CCI (>0)"] = last_row['cci'] > 0
-    if selection.get("ROC"): signals["Positive ROC (>0)"] = last_row['roc'] > 0
-    if selection.get("Volume Spike"): signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
-    if selection.get("OBV"): signals["OBV Rising"] = last_row['obv'] > last_row['obv'].rolling(10).mean()
-    if selection.get("VWAP") and is_intraday: signals["Price > VWAP"] = last_row['Close'] > last_row['vwap']
+    if selection.get("EMA Trend") and 'EMA50' in last_row: signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
+    if selection.get("Ichimoku Cloud") and 'ichimoku_a' in last_row: signals["Bullish Ichimoku"] = last_row['Close'] > last_row['ichimoku_a'] and last_row['Close'] > last_row['ichimoku_b']
+    if selection.get("Parabolic SAR") and 'psar' in last_row: signals["Bullish PSAR"] = last_row['Close'] > last_row['psar']
+    if selection.get("ADX") and 'adx' in last_row: signals["Strong Trend (ADX > 25)"] = last_row['adx'] > 25
+    if selection.get("RSI Momentum") and 'RSI' in last_row: signals["Bullish Momentum (RSI > 50)"] = last_row["RSI"] > 50
+    if selection.get("Stochastic") and 'stoch_k' in last_row: signals["Bullish Stoch Cross"] = last_row['stoch_k'] > last_row['stoch_d']
+    if selection.get("CCI") and 'cci' in last_row: signals["Bullish CCI (>0)"] = last_row['cci'] > 0
+    if selection.get("ROC") and 'roc' in last_row: signals["Positive ROC (>0)"] = last_row['roc'] > 0
+    if selection.get("Volume Spike") and 'Vol_Avg_50' in last_row: signals["Volume Spike (>1.5x Avg)"] = last_row["Volume"] > last_row["Vol_Avg_50"] * 1.5
+    if selection.get("OBV") and 'obv' in last_row: signals["OBV Rising"] = last_row['obv'] > last_row['obv'].rolling(10).mean()
+    if selection.get("VWAP") and is_intraday and 'vwap' in last_row: signals["Price > VWAP"] = last_row['Close'] > last_row['vwap']
     return signals
 
 def display_dashboard(ticker, hist, info, params, selection):
@@ -159,25 +175,24 @@ def display_dashboard(ticker, hist, info, params, selection):
             st.subheader("🎯 Key Price Levels"); current_price = last['Close']; prev_close = df['Close'].iloc[-2]; price_delta = current_price - prev_close
             st.metric(label="Current Price", value=f"${current_price:.2f}", delta=f"${price_delta:.2f}")
             
-            # --- Categorized Technical Analysis Section ---
             st.subheader("✅ Technical Analysis Readout")
             with st.expander("📈 Trend Indicators", expanded=True):
                 if selection.get("EMA Trend"): st.markdown(f"{'🟢' if signals.get('Uptrend (21>50>200 EMA)') else '🔴'} **EMA Trend**")
                 if selection.get("Ichimoku Cloud"): st.markdown(f"{'🟢' if signals.get('Bullish Ichimoku') else '🔴'} **Ichimoku Cloud** (Price > Cloud)")
                 if selection.get("Parabolic SAR"): st.markdown(f"{'🟢' if signals.get('Bullish PSAR') else '🔴'} **Parabolic SAR** (Price > SAR)")
-                if selection.get("ADX"): st.markdown(f"{'🟢' if signals.get('Strong Trend (ADX > 25)') else '🔴'} **ADX Strength:** `{last['adx']:.2f}`")
+                if selection.get("ADX"): st.markdown(f"{'🟢' if signals.get('Strong Trend (ADX > 25)') else '🔴'} **ADX Strength:** `{last.get('adx', 'N/A'):.2f}`")
             with st.expander("💨 Momentum Indicators", expanded=True):
-                if selection.get("RSI Momentum"): st.markdown(f"{'🟢' if signals.get('Bullish Momentum (RSI > 50)') else '🔴'} **RSI:** `{last['RSI']:.2f}`")
-                if selection.get("Stochastic"): st.markdown(f"{'🟢' if signals.get('Bullish Stoch Cross') else '🔴'} **Stochastic %K:** `{last['stoch_k']:.2f}`")
-                if selection.get("CCI"): st.markdown(f"{'🟢' if signals.get('Bullish CCI (>0)') else '🔴'} **CCI:** `{last['cci']:.2f}`")
-                if selection.get("ROC"): st.markdown(f"{'🟢' if signals.get('Positive ROC (>0)') else '🔴'} **ROC:** `{last['roc']:.2f}`")
+                if selection.get("RSI Momentum"): st.markdown(f"{'🟢' if signals.get('Bullish Momentum (RSI > 50)') else '🔴'} **RSI:** `{last.get('RSI', 'N/A'):.2f}`")
+                if selection.get("Stochastic"): st.markdown(f"{'🟢' if signals.get('Bullish Stoch Cross') else '🔴'} **Stochastic %K:** `{last.get('stoch_k', 'N/A'):.2f}`")
+                if selection.get("CCI"): st.markdown(f"{'🟢' if signals.get('Bullish CCI (>0)') else '🔴'} **CCI:** `{last.get('cci', 'N/A'):.2f}`")
+                if selection.get("ROC"): st.markdown(f"{'🟢' if signals.get('Positive ROC (>0)') else '🔴'} **ROC:** `{last.get('roc', 'N/A'):.2f}`")
             with st.expander("📊 Volume Indicators", expanded=True):
                 if selection.get("Volume Spike"): st.markdown(f"{'🟢' if signals.get('Volume Spike (>1.5x Avg)') else '🔴'} **Volume Spike**")
                 if selection.get("OBV"): st.markdown(f"{'🟢' if signals.get('OBV Rising') else '🔴'} **OBV Rising**")
-                if is_intraday and selection.get("VWAP"): st.markdown(f"{'🟢' if signals.get('Price > VWAP') else '🔴'} **VWAP:** `{last['vwap']:.2f}`")
+                if is_intraday and selection.get("VWAP"): st.markdown(f"{'🟢' if signals.get('Price > VWAP') else '🔴'} **VWAP:** `{last.get('vwap', 'N/A'):.2f}`")
             if selection.get("Pivot Points") and not is_intraday:
                 with st.expander("📌 Support & Resistance (Daily Pivots)"):
-                    pivots = calculate_pivot_points(df.iloc[-2]) # Use previous day's data
+                    pivots = calculate_pivot_points(df.iloc[-2])
                     st.dataframe(pivots.iloc[-1].round(2))
 
         with col2:
@@ -199,18 +214,14 @@ def display_dashboard(ticker, hist, info, params, selection):
         st.subheader(f"📰 News & Information for {ticker}")
         st.markdown("#### 🗞️ Latest Headlines")
         for h in finviz_data['headlines']: st.markdown(f"_{h}_")
-            
     with log_tab:
         st.subheader("📝 Log Your Trade Analysis"); user_notes = st.text_area("Add your personal notes or trade thesis here:")
         if st.button("💾 Save Analysis to Log"):
             log_data = {"Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"), "Ticker": ticker, "Confidence": f"{overall_confidence:.0f}",
                         "Tech": f"{scores['technical']:.0f}", "Sent": f"{scores['sentiment']:.0f}", "Exp": f"{scores['expert']:.0f}",
                         "Price": f"{last['Close']:.2f}", "Notes": user_notes.replace("\n", " ")}
-            # log_analysis(log_data) # This would require a function to be defined
+            # log_analysis(log_data)
             st.success("Log entry saved (placeholder).")
-        st.markdown("---"); st.subheader("📋 View Saved Log")
-        if os.path.exists(LOG_FILE): st.dataframe(pd.read_csv(LOG_FILE).sort_values(by="Timestamp", ascending=False))
-        else: st.warning("No log file found.")
 
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
