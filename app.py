@@ -1,4 +1,4 @@
-#===GoogleAIStudio 2 ====
+#===GoogleAIStudio 4 ====
 # -*- coding: utf-8 -*-
 # vim: set ts=4 sw=4 et:
 
@@ -70,7 +70,7 @@ def get_finviz_data(ticker):
             recom_tag = soup.find('td', text='Recom')
             analyst_recom = recom_tag.find_next_sibling('td').text if recom_tag else "N/A"
             headlines = [tag.text for tag in soup.findAll('a', class_='news-link-left')[:10]]
-            analyzer = SentimentIntensityAnalyzer()
+            analyzer = SentimentIntensityA nalyser()
             compound_scores = [analyzer.polarity_scores(h)['compound'] for h in headlines]
             avg_compound = sum(compound_scores) / len(compound_scores) if compound_scores else 0
             return {"recom": analyst_recom, "headlines": headlines, "sentiment_compound": avg_compound}
@@ -279,13 +279,21 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     
     today = datetime.now()
     target_exp_date = None
+    
+    # Prioritize expirations between 45 and 365 days out
+    suitable_expirations = []
     for exp_str in expirations:
         exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
-        if 45 <= (exp_date - today).days <= 90:
-            target_exp_date = exp_str
-            break
-    if not target_exp_date:
-        return {"status": "warning", "message": "Could not find a suitable expiration date (45-90 days out)."}
+        days_to_expiry = (exp_date - today).days
+        if 45 <= days_to_expiry <= 365: # Changed upper limit to 365 days (approx 1 year)
+            suitable_expirations.append((days_to_expiry, exp_str))
+            
+    if not suitable_expirations:
+        return {"status": "warning", "message": "Could not find a suitable expiration date (45-365 days out)."}
+    
+    # Sort by nearest expiry and pick the first one
+    suitable_expirations.sort()
+    target_exp_date = suitable_expirations[0][1]
 
     calls, _ = get_options_chain(ticker, target_exp_date)
     if calls.empty:
@@ -296,12 +304,38 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     target_options = pd.DataFrame() # Initialize empty DataFrame
 
     if confidence >= 75:
-        strategy = "Buy ITM Call"
-        reason = f"High confidence ({confidence:.0f}% bullish) suggests a strong directional move. An ITM call (Delta > 0.60) provides good leverage with a higher probability of success."
-        if 'delta' in calls.columns:
-            target_options = calls[(calls['inTheMoney']) & (calls['delta'] > 0.60)]
-        else: # Fallback if delta is not available
-            target_options = calls[calls['inTheMoney']]
+        # Suggest a Bull Call Spread for high confidence, if possible
+        # Buy ITM Call, Sell OTM Call (with higher strike)
+        itm_calls = calls[(calls['inTheMoney']) & (calls['delta'] > 0.60)].sort_values(by='strike', ascending=False)
+        if not itm_calls.empty:
+            buy_leg = itm_calls.iloc[0]
+            
+            # Find a suitable OTM call to sell (e.g., 2-5 strikes higher)
+            otm_calls_for_spread = calls[(calls['strike'] > buy_leg['strike']) & (calls['inTheMoney'] == False)].sort_values(by='strike', ascending=True)
+            if not otm_calls_for_spread.empty and len(otm_calls_for_spread) > 0:
+                sell_leg = otm_calls_for_spread.iloc[min(2, len(otm_calls_for_spread) - 1)] # Sell 3rd OTM option as example
+                strategy = "Bull Call Spread"
+                reason = f"High confidence ({confidence:.0f}% bullish) suggests a strong directional move with defined risk. A Bull Call Spread limits both upside and downside, reducing premium cost."
+                
+                spread_cost = buy_leg.get('ask', buy_leg.get('lastPrice',0)) - sell_leg.get('bid', sell_leg.get('lastPrice',0))
+                max_profit = (sell_leg['strike'] - buy_leg['strike']) - spread_cost
+                max_risk = spread_cost
+
+                if spread_cost > 0 and max_risk > 0: # Ensure valid spread
+                    return {"status": "success", "Strategy": strategy, "Reason": reason, "Expiration": target_exp_date,
+                            "Buy Strike": f"${buy_leg['strike']:.2f}", "Sell Strike": f"${sell_leg['strike']:.2f}",
+                            "Net Debit": f"~${spread_cost:.2f}",
+                            "Max Profit": f"~${max_profit:.2f}", "Max Risk": f"~${max_risk:.2f}", "Reward / Risk": f"{max_profit/max_risk:.1f} to 1" if max_risk > 0 else "N/A",
+                            "Contracts": {"Buy": buy_leg, "Sell": sell_leg}}
+            else:
+                strategy = "Buy ITM Call" # Fallback if spread not possible
+                reason = f"High confidence ({confidence:.0f}% bullish) suggests a strong directional move. An ITM call (Delta > 0.60) provides good leverage with a higher probability of success. (Bull Call Spread not feasible)."
+                target_options = itm_calls
+        else: # Fallback if no ITM calls for spread
+            strategy = "Buy ITM Call"
+            reason = f"High confidence ({confidence:.0f}% bullish) suggests a strong directional move. An ITM call (Delta > 0.60) provides good leverage with a higher probability of success. (No suitable ITM calls for spread)."
+            target_options = calls[(calls['inTheMoney'])] # Just any ITM call if delta not avail
+
                                                         
     elif 60 <= confidence < 75:
         strategy = "Buy ATM Call"
@@ -316,47 +350,25 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     if target_options.empty:
         return {"status": "error", "message": "Could not find any suitable options."}
 
-    recommended_option = target_options.iloc[0]
-    entry_price = recommended_option.get('ask', recommended_option.get('lastPrice'))
-    if entry_price is None or entry_price == 0: # Ensure entry_price is valid
-        entry_price = recommended_option.get('lastPrice')
-        if entry_price is None or entry_price == 0:
-            return {"status": "error", "message": "Could not determine a valid entry price for the recommended option."}
+    # For single call strategies
+    if strategy == "Buy ITM Call" or strategy == "Buy ATM Call":
+        recommended_option = target_options.iloc[0]
+        entry_price = recommended_option.get('ask', recommended_option.get('lastPrice'))
+        if entry_price is None or entry_price == 0: # Ensure entry_price is valid
+            entry_price = recommended_option.get('lastPrice')
+            if entry_price is None or entry_price == 0:
+                return {"status": "error", "message": "Could not determine a valid entry price for the recommended option."}
+        
+        risk_per_share = entry_price * 0.50 # 50% stop-loss
+        stop_loss = entry_price - risk_per_share
+        profit_target = entry_price + (risk_per_share * 2) # 2:1 Reward/Risk
+
+        return {"status": "success", "Strategy": strategy, "Reason": reason, "Expiration": target_exp_date,
+                "Strike": f"${recommended_option['strike']:.2f}", "Entry Price": f"~${entry_price:.2f}",
+                "Stop-Loss": f"~${stop_loss:.2f} (50% loss)", "Profit Target": f"~${profit_target:.2f} (100% gain)",
+                "Max Risk / Share": f"${risk_per_share:.2f}", "Reward / Risk": "2 to 1", "Contract": recommended_option}
     
-    risk_per_share = entry_price * 0.50 # 50% stop-loss
-    stop_loss = entry_price - risk_per_share
-    profit_target = entry_price + (risk_per_share * 2) # 2:1 Reward/Risk
-
-    return {"status": "success", "Strategy": strategy, "Reason": reason, "Expiration": target_exp_date,
-            "Strike": f"${recommended_option['strike']:.2f}", "Entry Price": f"~${entry_price:.2f}",
-            "Stop-Loss": f"~${stop_loss:.2f} (50% loss)", "Profit Target": f"~${profit_target:.2f} (100% gain)",
-            "Max Risk / Share": f"${risk_per_share:.2f}", "Reward / Risk": "2 to 1", "Contract": recommended_option}
-
-# Placeholder for get_options_suggestion - YOU NEED TO IMPLEMENT THIS LOGIC
-def get_options_suggestion(confidence, stock_price, calls_df):
-    """
-    This is a placeholder function. You need to implement your logic here
-    to analyze the options chain and provide more specific suggestions.
-    """
-    if calls_df.empty:
-        return "warning", "No call options available for detailed suggestion.", "", None
-
-    if confidence >= 75:
-        # Example: Suggest nearest ITM call with good liquidity
-        if 'inTheMoney' in calls_df.columns and 'volume' in calls_df.columns:
-            itm_calls = calls_df[calls_df['inTheMoney'] & (calls_df['volume'] > 10)]
-            if not itm_calls.empty:
-                target_call = itm_calls.iloc[0] # Just taking the first one as an example
-                return "success", f"High Confidence ({confidence:.0f}%): Consider a deep In-The-Money (ITM) call for strong directional play.", "Look for calls with high delta and good liquidity.", target_call
-        return "info", f"High Confidence ({confidence:.0f}%), but specific ITM call not found.", "Consider ATM calls or further research.", None
-    elif 60 <= confidence < 75:
-        # Example: Suggest nearest ATM call
-        atm_call = calls_df.iloc[[(calls_df['strike'] - stock_price).abs().idxmin()]]
-        if not atm_call.empty:
-            return "info", f"Moderate Confidence ({confidence:.0f}%): An At-The-Money (ATM) call balances cost and potential upside.", "This is a good general strategy for moderate bullishness.", atm_call.iloc[0]
-        return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
-    else:
-        return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
+    return {"status": "error", "message": "No suitable option strategy found."}
 
 
 def display_dashboard(ticker, hist, info, params, selection):
@@ -397,99 +409,105 @@ def display_dashboard(ticker, hist, info, params, selection):
             
             st.subheader("✅ Technical Analysis Readout") # Categorized display here...
             
-            def format_indicator_display(signal_name, current_value, description, ideal_value, selected, signals_dict):
-                if not selected: return "" # Don't display if not selected
+            def format_indicator_display(signal_key, current_value, description, ideal_value_desc, selected, signals_dict):
+                """
+                Formats and displays a single technical indicator's information.
                 
-                is_fired = signals_dict.get(signal_name, False)
+                Args:
+                    signal_key (str): The key used in the `signals` dictionary (e.g., "Uptrend (21>50>200 EMA)").
+                    current_value: The numerical value of the indicator for the latest data point. Can be None if not applicable.
+                    description (str): A brief explanation of what the indicator does.
+                    ideal_value_desc (str): A description of what constitutes a 'bullish' or 'ideal' value/condition.
+                    selected (bool): Whether the indicator is selected by the user.
+                    signals_dict (dict): The dictionary of calculated signals.
+                """
+                if not selected:
+                    return "" # Don't display if not selected
+                
+                is_fired = signals_dict.get(signal_key, False)
                 status_icon = '🟢' if is_fired else '🔴'
-                name = signal_name.split('(')[0].strip() # Clean name for display
+                display_name = signal_key.split('(')[0].strip() # Clean name for display
 
-                value_str = f"Current: `{current_value:.2f}`" if isinstance(current_value, (int, float)) else "N/A"
-                if current_value is None: value_str = "N/A" # Handle explicit None
+                value_str = ""
+                if current_value is not None and not pd.isna(current_value):
+                    if isinstance(current_value, (int, float)):
+                        value_str = f"Current: `{current_value:.2f}`"
+                    else:
+                        value_str = "Current: N/A"
+                else:
+                    value_str = "Current: N/A"
 
                 return (
-                    f"{status_icon} **{name}**\n"
+                    f"{status_icon} **{display_name}**\n"
                     f"   - *Description:* {description}\n"
-                    f"   - *Ideal (Bullish):* {ideal_value}\n"
+                    f"   - *Ideal (Bullish):* {ideal_value_desc}\n"
                     f"   - *{value_str}*\n"
                 )
 
             with st.expander("📈 Trend Indicators", expanded=True):
-                if selection.get("EMA Trend"):
-                    st.markdown(format_indicator_display(
-                        "Uptrend (21>50>200 EMA)", None,
-                        "Exponential Moving Averages (EMAs) smooth price data to identify trend direction. A bullish trend is indicated when shorter EMAs (e.g., 21-day) are above longer EMAs (e.g., 50-day), and both are above the longest EMA (e.g., 200-day).",
-                        "21 EMA > 50 EMA > 200 EMA",
-                        selection.get("EMA Trend"), signals
-                    ))
-                if selection.get("Ichimoku Cloud"):
-                    st.markdown(format_indicator_display(
-                        "Bullish Ichimoku", None,
-                        "The Ichimoku Cloud is a comprehensive indicator that defines support and resistance, identifies trend direction, and gauges momentum. A bullish signal occurs when the price is above the cloud, indicating an uptrend.",
-                        "Price > Ichimoku Cloud",
-                        selection.get("Ichimoku Cloud"), signals
-                    ))
-                if selection.get("Parabolic SAR"):
-                    st.markdown(format_indicator_display(
-                        "Bullish PSAR", last.get('psar'),
-                        "Parabolic Stop and Reverse (PSAR) is a time and price based trading system used to identify potential reversals in the price movement of traded assets. Bullish when dots are below price.",
-                        "Dots below price",
-                        selection.get("Parabolic SAR"), signals
-                    ))
-                if selection.get("ADX"):
-                    st.markdown(format_indicator_display(
-                        "Strong Trend (ADX > 25)", last.get('adx'),
-                        "The Average Directional Index (ADX) quantifies the strength of a trend. Values above 25 generally indicate a strong trend (either up or down), while values below 20 suggest a weak or non-trending market.",
-                        "ADX > 25",
-                        selection.get("ADX"), signals
-                    ))
+                st.markdown(format_indicator_display(
+                    "Uptrend (21>50>200 EMA)", None,
+                    "Exponential Moving Averages (EMAs) smooth price data to identify trend direction. A bullish trend is indicated when shorter EMAs (e.g., 21-day) are above longer EMAs (e.g., 50-day), and both are above the longest EMA (e.g., 200-day).",
+                    "21 EMA > 50 EMA > 200 EMA",
+                    selection.get("EMA Trend"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Bullish Ichimoku", None,
+                    "The Ichimoku Cloud is a comprehensive indicator that defines support and resistance, identifies trend direction, and gauges momentum. A bullish signal occurs when the price is above the cloud, indicating an uptrend.",
+                    "Price > Ichimoku Cloud",
+                    selection.get("Ichimoku Cloud"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Bullish PSAR", last.get('psar'),
+                    "Parabolic Stop and Reverse (PSAR) is a time and price based trading system used to identify potential reversals in the price movement of traded assets. Bullish when dots are below price.",
+                    "Dots below price",
+                    selection.get("Parabolic SAR"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Strong Trend (ADX > 25)", last.get('adx'),
+                    "The Average Directional Index (ADX) quantifies the strength of a trend. Values above 25 generally indicate a strong trend (either up or down), while values below 20 suggest a weak or non-trending market.",
+                    "ADX > 25",
+                    selection.get("ADX"), signals
+                ))
             
-            with st.expander("💨 Momentum Indicators", expanded=True):
-                if selection.get("RSI Momentum"):
-                    st.markdown(format_indicator_display(
-                        "Bullish Momentum (RSI > 50)", last.get('RSI'),
-                        "The Relative Strength Index (RSI) is a momentum oscillator measuring the speed and change of price movements. An RSI above 50 generally suggests bullish momentum, while below 50 indicates bearish momentum.",
-                        "RSI > 50",
-                        selection.get("RSI Momentum"), signals
-                    ))
-                if selection.get("Stochastic"):
-                    st.markdown(format_indicator_display(
-                        "Bullish Stoch Cross", last.get('stoch_k'),
-                        "The Stochastic Oscillator is a momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period. A bullish cross occurs when %K (fast line) crosses above %D (slow line), often below 50.",
-                        "%K line crosses above %D line (preferably below 50)",
-                        selection.get("Stochastic"), signals
-                    ))
-                if selection.get("CCI"):
-                    st.markdown(format_indicator_display(
-                        "Bullish CCI (>0)", last.get('cci'),
-                        "The Commodity Channel Index (CCI) measures the current price level relative to an average price level over a given period. A CCI above zero generally indicates the price is above its average, suggesting an uptrend.",
-                        "CCI > 0",
-                        selection.get("CCI"), signals
-                    ))
-                if selection.get("ROC"):
-                    st.markdown(format_indicator_display(
-                        "Positive ROC (>0)", last.get('roc'),
-                        "Rate of Change (ROC) is a momentum indicator that measures the percentage change between the current price and the price a certain number of periods ago. A positive ROC indicates upward momentum.",
-                        "ROC > 0",
-                        selection.get("ROC"), signals
-                    ))
-            
-            with st.expander("📊 Volume Indicators", expanded=True):
-                if selection.get("Volume Spike"):
-                    st.markdown(format_indicator_display(
-                        "Volume Spike (>1.5x Avg)", None,
-                        "A volume spike indicates an unusual increase in trading activity, which often precedes or accompanies significant price movements. A volume greater than 1.5 times the average suggests strong interest.",
-                        "Volume > 1.5x 50-day Average Volume",
-                        selection.get("Volume Spike"), signals
-                    ))
-                if selection.get("OBV"):
-                    st.markdown(format_indicator_display(
-                        "OBV Rising", last.get('obv'), # Current OBV value
-                        "On-Balance Volume (OBV) relates volume to price changes. A rising OBV indicates that positive volume pressure is increasing and confirms an uptrend.",
-                        "OBV is rising (higher than its recent average)",
-                        selection.get("OBV"), signals
-                    ))
-                if is_intraday and selection.get("VWAP"):
+            with st.expander("💨 Momentum & Volume Indicators", expanded=True):
+                st.markdown(format_indicator_display(
+                    "Bullish Momentum (RSI > 50)", last.get('RSI'),
+                    "The Relative Strength Index (RSI) is a momentum oscillator measuring the speed and change of price movements. An RSI above 50 generally suggests bullish momentum, while below 50 indicates bearish momentum.",
+                    "RSI > 50",
+                    selection.get("RSI Momentum"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Bullish Stoch Cross", last.get('stoch_k'),
+                    "The Stochastic Oscillator is a momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period. A bullish cross occurs when %K (fast line) crosses above %D (slow line), often below 50.",
+                    "%K line crosses above %D line (preferably below 50)",
+                    selection.get("Stochastic"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Bullish CCI (>0)", last.get('cci'),
+                    "The Commodity Channel Index (CCI) measures the current price level relative to an average price level over a given period. A CCI above zero generally indicates the price is above its average, suggesting an uptrend.",
+                    "CCI > 0",
+                    selection.get("CCI"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Positive ROC (>0)", last.get('roc'),
+                    "Rate of Change (ROC) is a momentum indicator that measures the percentage change between the current price and the price a certain number of periods ago. A positive ROC indicates upward momentum.",
+                    "ROC > 0",
+                    selection.get("ROC"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "Volume Spike (>1.5x Avg)", last.get('Volume'),
+                    "A volume spike indicates an unusual increase in trading activity, which often precedes or accompanies significant price movements. A volume greater than 1.5 times the average suggests strong interest.",
+                    "Volume > 1.5x 50-day Average Volume",
+                    selection.get("Volume Spike"), signals
+                ))
+                st.markdown(format_indicator_display(
+                    "OBV Rising", last.get('obv'), # Current OBV value
+                    "On-Balance Volume (OBV) relates volume to price changes. A rising OBV indicates that positive volume pressure is increasing and confirms an uptrend.",
+                    "OBV is rising (higher than its recent average)",
+                    selection.get("OBV"), signals
+                ))
+                if is_intraday:
                     st.markdown(format_indicator_display(
                         "Price > VWAP", last.get('vwap'),
                         "Volume Weighted Average Price (VWAP) is a trading benchmark that represents the average price a security has traded at throughout the day, based on both volume and price. Price trading above VWAP is considered bullish.",
@@ -522,7 +540,7 @@ def display_dashboard(ticker, hist, info, params, selection):
         
         # Ensure ATR and Low are available for stop loss/profit target
         stop_loss_val = last['Low'] - last['ATR'] if 'Low' in last and 'ATR' in last and not pd.isna(last['ATR']) else last['Close'] * 0.95
-        profit_target_val = last['Close'] + (2 * (last['Close'] - stop_loss_val)) if 'Close' in last and stop_loss_val else last['Close'] * 1.1
+        profit_target_val = last['Close'] + (2 * (last['Close'] - stop_loss_val)) if 'Close' in last and stop_loss_val and not pd.isna(stop_loss_val) else last['Close'] * 1.1
         
         st.info(f"**Based on {overall_confidence:.0f}% Overall Confidence:**\n\n"
                 f"**Entry Zone:** Between **${entry_zone_start:.2f}** and **${entry_zone_end:.2f}**.\n"
@@ -533,33 +551,73 @@ def display_dashboard(ticker, hist, info, params, selection):
         st.subheader("🎭 Automated Options Strategy")
         stock_obj = yf.Ticker(ticker)
         expirations = stock_obj.options
-        if not expirations: st.warning("No options data available for this ticker.")
+        if not expirations:
+            st.warning("No options data available for this ticker.")
         else:
             trade_plan = generate_option_trade_plan(ticker, overall_confidence, last['Close'], expirations)
             if trade_plan['status'] == 'success':
                 st.success(f"**Recommended Strategy: {trade_plan['Strategy']}** (Confidence: {overall_confidence:.0f}%)")
                 st.info(trade_plan['Reason'])
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Strike", trade_plan['Strike'])
-                col2.metric("Expiration", trade_plan['Expiration'])
-                col3.metric("Entry Price", trade_plan['Entry Price'])
-                col4.metric("Reward/Risk", trade_plan['Reward / Risk'])
-                st.write(f"**Stop-Loss:** `{trade_plan['Stop-Loss']}` | **Profit Target:** `{trade_plan['Profit Target']}` | **Max Risk:** `{trade_plan['Max Risk / Share']}` per share")
+                
+                if trade_plan['Strategy'] == "Bull Call Spread":
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    col1.metric("Buy Strike", trade_plan['Buy Strike'])
+                    col2.metric("Sell Strike", trade_plan['Sell Strike'])
+                    col3.metric("Expiration", trade_plan['Expiration'])
+                    col4.metric("Net Debit", trade_plan['Net Debit'])
+                    col5.metric("Max Profit / Max Risk", f"{trade_plan['Max Profit']}/{trade_plan['Max Risk']}")
+                    st.write(f"**Reward / Risk:** `{trade_plan['Reward / Risk']}`")
+                else: # Single Call strategies
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Strike", trade_plan['Strike'])
+                    col2.metric("Expiration", trade_plan['Expiration'])
+                    col3.metric("Entry Price", trade_plan['Entry Price'])
+                    col4.metric("Reward/Risk", trade_plan['Reward / Risk'])
+                    st.write(f"**Stop-Loss:** `{trade_plan['Stop-Loss']}` | **Profit Target:** `{trade_plan['Profit Target']}` | **Max Risk:** `{trade_plan['Max Risk / Share']}` per share")
                 
                 st.markdown("---")
                 st.subheader("🔬 Recommended Option Deep-Dive")
-                rec_option = trade_plan['Contract']
-                option_metrics = [
-                    {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
-                    {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
-                    {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
-                    {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
-                    {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option.get('bid', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option.get('ask', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option.get('volume', 0):,}", "Ideal for Buyers": "Higher (>100)"},
-                ]
-                st.table(pd.DataFrame(option_metrics).set_index("Metric"))
-            else: st.warning(trade_plan['message'])
+                if trade_plan['Strategy'] == "Bull Call Spread":
+                    st.write("**Buy Leg:**")
+                    rec_option_buy = trade_plan['Contracts']['Buy']
+                    option_metrics_buy = [
+                        {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option_buy.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
+                        {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option_buy.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80"},
+                        {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option_buy.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
+                        {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option_buy.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
+                        {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option_buy.get('bid', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
+                        {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option_buy.get('ask', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
+                        {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option_buy.get('volume', 0):,}", "Ideal for Buyers": "Higher (>100)"},
+                    ]
+                    st.table(pd.DataFrame(option_metrics_buy).set_index("Metric"))
+
+                    st.write("**Sell Leg:**")
+                    rec_option_sell = trade_plan['Contracts']['Sell']
+                    option_metrics_sell = [
+                        {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option_sell.get('impliedVolatility', 0):.2%}", "Ideal for Sellers": "Higher is better"},
+                        {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option_sell.get('delta', 0):.2f}", "Ideal for Sellers": "Lower (0.20-0.40)"},
+                        {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option_sell.get('theta', 0):.3f}", "Ideal for Sellers": "Higher (more decay)"},
+                        {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option_sell.get('openInterest', 0):,}", "Ideal for Sellers": "> 100s"},
+                        {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option_sell.get('bid', 0):.2f}", "Ideal for Sellers": "Higher to exit"},
+                        {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option_sell.get('ask', 0):.2f}", "Ideal for Sellers": "Higher to exit"},
+                        {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option_sell.get('volume', 0):,}", "Ideal for Sellers": "Higher (>100)"},
+                    ]
+                    st.table(pd.DataFrame(option_metrics_sell).set_index("Metric"))
+
+                else: # Single Call strategy
+                    rec_option = trade_plan['Contract']
+                    option_metrics = [
+                        {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
+                        {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
+                        {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
+                        {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
+                        {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option.get('bid', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
+                        {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option.get('ask', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
+                        {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option.get('volume', 0):,}", "Ideal for Buyers": "Higher (>100)"},
+                    ]
+                    st.table(pd.DataFrame(option_metrics).set_index("Metric"))
+            else:
+                st.warning(trade_plan['message'])
             
             st.markdown("---")
             st.subheader("⛓️ Full Option Chain")
@@ -567,12 +625,7 @@ def display_dashboard(ticker, hist, info, params, selection):
             exp_date_str = st.selectbox("Select Expiration Date to View", expirations)
             if exp_date_str:
                 calls, puts = get_options_chain(ticker, exp_date_str)
-                rec_type, suggestion, reason, target_call = get_options_suggestion(overall_confidence, last['Close'], calls)
-                if rec_type == "success": st.success(suggestion)
-                elif rec_type == "info": st.info(suggestion)
-                else: st.warning(suggestion)
-                st.write(reason)
-                if target_call is not None: st.write("**Example Target Option:**"); st.json(target_call.to_dict())
+                # Removed the general get_options_suggestion, as detailed plan is above
                 st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
                 
                 chain_to_display = calls if option_type == "Calls" else puts
