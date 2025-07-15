@@ -4,6 +4,8 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt # Needed for plt.close() in display_components
 import os # For LOG_FILE constant
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import functions from your new modules
 from utils import (
@@ -16,7 +18,6 @@ from display_components import (
     display_main_analysis_tab, display_trade_plan_options_tab,
     display_backtest_tab, display_news_info_tab, display_trade_log_tab
 )
-
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
