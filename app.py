@@ -1,9 +1,37 @@
 # app.py
+# -*- coding: utf-8 -*-
+# vim: set ts=4 sw=4 et:
 
 import streamlit as st
+import yfinance as yf
 import pandas as pd
+import ta
+import mplfinance as mpf
 import matplotlib.pyplot as plt # Needed for plt.close() in display_components
 import os # For LOG_FILE constant
+import requests
+from bs4 import BeautifulSoup
+import nltk # Import NLTK
+import ssl # Import SSL for the workaround
+# === NLTK Data Download Workaround (Run once at the start) ===
+@st.cache_resource
+def download_nltk_data():
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
+    
+    try:
+        nltk.data.find('sentiment/vader_lexicon.zip')
+    except LookupError:
+        nltk.download('vader_lexicon')
+
+download_nltk_data()
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer # Now import VADER safely
+from datetime import datetime
+
 
 # Import functions from your new modules
 from utils import (
