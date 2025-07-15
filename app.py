@@ -135,6 +135,8 @@ def calculate_indicators(df, is_intraday=False):
     except Exception as e: st.warning(f"Could not calculate RSI: {e}", icon="⚠️")
     try: stoch = ta.momentum.StochasticOscillator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']); df_cleaned.loc[:, 'stoch_k'] = stoch.stoch(); df_cleaned.loc[:, 'stoch_d'] = stoch.stoch_signal()
     except Exception as e: st.warning(f"Could not calculate Stochastic Oscillator: {e}", icon="⚠️")
+
+    # === THIS IS THE SECTION TO REPLACE / ADD THE NEW CCI LOGIC ===
     try: 
         # Ensure 'High', 'Low', 'Close' are not all identical, which can cause division by zero or NaN issues
         if not (df_cleaned['High'] == df_cleaned['Low']).all() and not (df_cleaned['High'] == df_cleaned['Close']).all():
@@ -142,6 +144,8 @@ def calculate_indicators(df, is_intraday=False):
         else:
             st.warning("CCI cannot be calculated due to invariant High/Low/Close prices.", icon="⚠️")
     except Exception as e: st.warning(f"Could not calculate CCI: {e}", icon="⚠️") # Catch generic exceptions
+    # =============================================================
+
     try: df_cleaned.loc[:, 'roc'] = ta.momentum.ROCIndicator(df_cleaned['Close']).roc()
     except Exception as e: st.warning(f"Could not calculate ROC: {e}", icon="⚠️")
     try: df_cleaned.loc[:, 'obv'] = ta.volume.OnBalanceVolumeIndicator(df_cleaned['Close'], df_cleaned['Volume']).on_balance_volume()
