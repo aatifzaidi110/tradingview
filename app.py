@@ -124,12 +124,9 @@ def calculate_pivot_points(df):
     return pd.DataFrame({'S2':s2, 'S1':s1, 'Pivot':pp, 'R1':r1, 'R2':r2})
 
 def generate_signals(df, selection, is_intraday=False):
-    """Generates signals based on the last row of the DataFrame."""
     signals = {}; last_row = df.iloc[-1]
-    # === FIX: Corrected OBV signal calculation ===
     if selection.get("OBV") and 'obv' in df.columns and len(df) > 10:
         signals["OBV Rising"] = last_row['obv'] > df['obv'].rolling(10).mean().iloc[-1]
-    
     if selection.get("EMA Trend"): signals["Uptrend (21>50>200 EMA)"] = last_row["EMA50"] > last_row["EMA200"] and last_row["EMA21"] > last_row["EMA50"]
     if selection.get("Ichimoku Cloud"): signals["Bullish Ichimoku"] = last_row['Close'] > last_row['ichimoku_a'] and last_row['Close'] > last_row['ichimoku_b']
     if selection.get("Parabolic SAR"): signals["Bullish PSAR"] = last_row['Close'] > last_row['psar']
@@ -142,10 +139,27 @@ def generate_signals(df, selection, is_intraday=False):
     if selection.get("VWAP") and is_intraday: signals["Price > VWAP"] = last_row['Close'] > last_row['vwap']
     return signals
 
+def backtest_strategy(df_historical, selection, atr_multiplier=1.5, reward_risk_ratio=2.0):
+    trades = []; in_trade = False
+    for i in range(1, len(df_historical) - 1):
+        if in_trade:
+            if df_historical['Low'].iloc[i] <= stop_loss: trades.append({"Date": df_historical.index[i].strftime('%Y-%m-%d'), "Type": "Exit (Loss)", "Price": stop_loss}); in_trade = False
+            elif df_historical['High'].iloc[i] >= take_profit: trades.append({"Date": df_historical.index[i].strftime('%Y-%m-%d'), "Type": "Exit (Win)", "Price": take_profit}); in_trade = False
+        if not in_trade:
+            row = df_historical.iloc[i-1]
+            if pd.isna(row.get('EMA200')): continue
+            signals = generate_signals(df_historical.iloc[:i], selection) # Pass historical df up to current point
+            if signals and all(signals.values()):
+                entry_price = df_historical['Open'].iloc[i]
+                stop_loss = entry_price - (row['ATR'] * atr_multiplier); take_profit = entry_price + (row['ATR'] * atr_multiplier * reward_risk_ratio)
+                trades.append({"Date": df_historical.index[i].strftime('%Y-%m-%d'), "Type": "Entry", "Price": entry_price}); in_trade = True
+    wins = len([t for t in trades if t['Type'] == 'Exit (Win)']); losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
+    return trades, wins, losses
+
 def display_dashboard(ticker, hist, info, params, selection):
     is_intraday = params['interval'] in ['5m', '60m']
     df = calculate_indicators(hist.copy(), is_intraday)
-    signals = generate_signals(df, selection, is_intraday) # Pass the full df
+    signals = generate_signals(df, selection, is_intraday)
     last = df.iloc[-1]
     
     technical_score = (sum(1 for f in signals.values() if f) / len(signals)) * 100 if signals else 0
@@ -160,8 +174,9 @@ def display_dashboard(ticker, hist, info, params, selection):
     
     st.header(f"Analysis for {ticker} ({params['interval']} Interval)")
     
-    tab_list = ["📊 Main Analysis", "📈 Trade Plan", "📰 News & Info", "📝 Trade Log"]
-    main_tab, trade_tab, news_tab, log_tab = st.tabs(tab_list)
+    # === RE-INTEGRATED BACKTEST TAB ===
+    tab_list = ["📊 Main Analysis", "📈 Trade Plan", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
+    main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
     with main_tab:
         col1, col2 = st.columns([1, 2])
@@ -174,19 +189,23 @@ def display_dashboard(ticker, hist, info, params, selection):
             
             st.subheader("✅ Technical Analysis Readout")
             with st.expander("📈 Trend Indicators", expanded=True):
-                if selection.get("EMA Trend"): st.markdown(f"{'🟢' if signals.get('Uptrend (21>50>200 EMA)') else '🔴'} **EMA Trend**")
-                if selection.get("Ichimoku Cloud"): st.markdown(f"{'🟢' if signals.get('Bullish Ichimoku') else '🔴'} **Ichimoku Cloud** (Price > Cloud)")
-                if selection.get("Parabolic SAR"): st.markdown(f"{'🟢' if signals.get('Bullish PSAR') else '🔴'} **Parabolic SAR** (Price > SAR)")
-                if selection.get("ADX"): st.markdown(f"{'🟢' if signals.get('Strong Trend (ADX > 25)') else '🔴'} **ADX Strength:** `{last.get('adx', 'N/A'):.2f}`")
+                # === FIX: Robust value formatting ===
+                def format_value(signal_name, value):
+                    return f"{'🟢' if signals.get(signal_name) else '🔴'} **{signal_name.split('(')[0].strip()}:** `{value:.2f}`" if isinstance(value, (int, float)) else f"{'🟢' if signals.get(signal_name) else '🔴'} **{signal_name.split('(')[0].strip()}**"
+
+                if selection.get("EMA Trend"): st.markdown(format_value("Uptrend (21>50>200 EMA)", None))
+                if selection.get("Ichimoku Cloud"): st.markdown(format_value("Bullish Ichimoku", None))
+                if selection.get("Parabolic SAR"): st.markdown(format_value("Bullish PSAR", None))
+                if selection.get("ADX"): st.markdown(format_value("Strong Trend (ADX > 25)", last.get('adx')))
             with st.expander("💨 Momentum Indicators", expanded=True):
-                if selection.get("RSI Momentum"): st.markdown(f"{'🟢' if signals.get('Bullish Momentum (RSI > 50)') else '🔴'} **RSI:** `{last.get('RSI', 'N/A'):.2f}`")
-                if selection.get("Stochastic"): st.markdown(f"{'🟢' if signals.get('Bullish Stoch Cross') else '🔴'} **Stochastic %K:** `{last.get('stoch_k', 'N/A'):.2f}`")
-                if selection.get("CCI"): st.markdown(f"{'🟢' if signals.get('Bullish CCI (>0)') else '🔴'} **CCI:** `{last.get('cci', 'N/A'):.2f}`")
-                if selection.get("ROC"): st.markdown(f"{'🟢' if signals.get('Positive ROC (>0)') else '🔴'} **ROC:** `{last.get('roc', 'N/A'):.2f}`")
+                if selection.get("RSI Momentum"): st.markdown(format_value("Bullish Momentum (RSI > 50)", last.get('RSI')))
+                if selection.get("Stochastic"): st.markdown(format_value("Bullish Stoch Cross", last.get('stoch_k')))
+                if selection.get("CCI"): st.markdown(format_value("Bullish CCI (>0)", last.get('cci')))
+                if selection.get("ROC"): st.markdown(format_value("Positive ROC (>0)", last.get('roc')))
             with st.expander("📊 Volume Indicators", expanded=True):
-                if selection.get("Volume Spike"): st.markdown(f"{'🟢' if signals.get('Volume Spike (>1.5x Avg)') else '🔴'} **Volume Spike**")
-                if selection.get("OBV"): st.markdown(f"{'🟢' if signals.get('OBV Rising') else '🔴'} **OBV Rising**")
-                if is_intraday and selection.get("VWAP"): st.markdown(f"{'🟢' if signals.get('Price > VWAP') else '🔴'} **VWAP:** `{last.get('vwap', 'N/A'):.2f}`")
+                if selection.get("Volume Spike"): st.markdown(format_value("Volume Spike (>1.5x Avg)", None))
+                if selection.get("OBV"): st.markdown(format_value("OBV Rising", None))
+                if is_intraday and selection.get("VWAP"): st.markdown(format_value("Price > VWAP", last.get('vwap')))
             if selection.get("Pivot Points") and not is_intraday:
                 with st.expander("📌 Support & Resistance (Daily Pivots)"):
                     pivots = calculate_pivot_points(df.iloc[-2])
@@ -199,7 +218,6 @@ def display_dashboard(ticker, hist, info, params, selection):
             mpf.plot(df.tail(120), type='candle', style='yahoo', mav=mav_tuple, volume=True, addplot=ap, title=f"{ticker} - {params['interval']} chart", savefig=chart_path)
             st.image(chart_path); os.remove(chart_path)
 
-    # Other tabs...
     with trade_tab:
         st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
         entry_zone_start = last['EMA21'] * 0.99; entry_zone_end = last['EMA21'] * 1.01
@@ -207,10 +225,24 @@ def display_dashboard(ticker, hist, info, params, selection):
         st.info(f"**Entry Zone:** Between **${entry_zone_start:.2f}** and **${entry_zone_end:.2f}**.\n"
                 f"**Stop-Loss:** A close below **${stop_loss:.2f}**.\n"
                 f"**Profit Target:** Around **${profit_target:.2f}** (2:1 Reward/Risk).")
+
+    with backtest_tab:
+        st.subheader(f"🧪 Historical Backtest for {ticker}"); st.info(f"Simulating trades based on your **currently selected indicators**. Entry is triggered if ALL selected signals are positive.")
+        daily_hist_for_backtest, _ = get_data(ticker, "2y", "1d")
+        if daily_hist_for_backtest is not None:
+            daily_df = calculate_indicators(daily_hist_for_backtest.copy())
+            trades, wins, losses = backtest_strategy(daily_df, selection)
+            total_trades = wins + losses; win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Trades Simulated", total_trades); col2.metric("Wins", wins); col3.metric("Win Rate", f"{win_rate:.1f}%")
+            if trades: st.dataframe(pd.DataFrame(trades).tail(20))
+        else: st.warning("Could not fetch daily data for backtesting.")
+
     with news_tab:
         st.subheader(f"📰 News & Information for {ticker}")
         st.markdown("#### 🗞️ Latest Headlines")
         for h in finviz_data['headlines']: st.markdown(f"_{h}_")
+            
     with log_tab:
         st.subheader("📝 Log Your Trade Analysis"); user_notes = st.text_area("Add your personal notes or trade thesis here:")
         if st.button("💾 Save Analysis to Log"):
