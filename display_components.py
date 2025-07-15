@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import mplfinance as mpf
 import matplotlib.pyplot as plt
+import yfinance as yf
 import os # For chart saving/removing, though direct plot is preferred
 
 # Import functions from utils.py

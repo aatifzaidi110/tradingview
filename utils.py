@@ -1,12 +1,23 @@
 # utils.py
+import nltk
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
+# This block attempts to find the lexicon; if not found, it downloads it.
+try:
+    nltk.data.find('sentiment/vader_lexicon.zip')
+except nltk.downloader.DownloadError:
+    nltk.download('vader_lexicon')
+
+# You can then initialize your analyzer like this:
+# analyzer = SentimentIntensityAnalyzer()
+
+# ... rest of your utils.py code
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import ta
 import requests
 from bs4 import BeautifulSoup
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from datetime import datetime, timedelta
 
 # === Data Fetching Functions ===
