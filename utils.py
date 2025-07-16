@@ -71,48 +71,24 @@ def calculate_indicators(df, is_intraday=False):
     try: df_cleaned.loc[:, "EMA21"]=ta.trend.ema_indicator(df_cleaned["Close"],21); df_cleaned.loc[:, "EMA50"]=ta.trend.ema_indicator(df_cleaned["Close"],50); df_cleaned.loc[:, "EMA200"]=ta.trend.ema_indicator(df_cleaned["Close"],200)
     except Exception as e: st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
 
-    # --- Corrected Ichimoku Cloud Calculation (using direct functions) ---
-    try:
-        # For ta 0.11.0, Ichimoku components are often calculated using direct functions
-        # which take high, low, close, and window parameters.
-        df_cleaned.loc[:, 'ichimoku_conversion_line'] = ta.trend.ichimoku_conversion_line(
-            high=df_cleaned['High'],
-            low=df_cleaned['Low'],
-            close=df_cleaned['Close'],
-            window1=9,
-            window2=26,
-            fillna=True
-        )
-        df_cleaned.loc[:, 'ichimoku_base_line'] = ta.trend.ichimoku_base_line(
-            high=df_cleaned['High'],
-            low=df_cleaned['Low'],
-            close=df_cleaned['Close'],
-            window1=9, # conversion_line uses window1
-            window2=26, # base_line uses window2
-            fillna=True
-        )
-        df_cleaned.loc[:, 'ichimoku_a'] = ta.trend.ichimoku_a(
-            high=df_cleaned['High'],
-            low=df_cleaned['Low'],
-            window1=9, # window1 for tenkan
-            window2=26, # window2 for kijun
-            fillna=True
-        )
-        df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
-            high=df_cleaned['High'],
-            low=df_cleaned['Low'],
-            window2=26, # window2 for kijun
-            window3=52, # window3 for senkou span B
-            fillna=True
-        )
-    except Exception as e:
-        st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
-        # Ensure columns are added even if calculation fails to prevent KeyError later
-        df_cleaned.loc[:, 'ichimoku_a'] = pd.NA
-        df_cleaned.loc[:, 'ichimoku_b'] = pd.NA
-        df_cleaned.loc[:, 'ichimoku_conversion_line'] = pd.NA
-        df_cleaned.loc[:, 'ichimoku_base_line'] = pd.NA
-    # --- End Corrected Ichimoku Cloud Calculation ---
+    # --- Ichimoku Cloud Calculation (DISABLED) ---
+    # try:
+    #     df_cleaned.loc[:, 'ichimoku_conversion_line'] = ta.trend.ichimoku_conversion_line(
+    #         high=df_cleaned['High'], low=df_cleaned['Low'], close=df_cleaned['Close'], window1=9, window2=26, fillna=True)
+    #     df_cleaned.loc[:, 'ichimoku_base_line'] = ta.trend.ichimoku_base_line(
+    #         high=df_cleaned['High'], low=df_cleaned['Low'], close=df_cleaned['Close'], window1=9, window2=26, fillna=True)
+    #     df_cleaned.loc[:, 'ichimoku_a'] = ta.trend.ichimoku_a(
+    #         high=df_cleaned['High'], low=df_cleaned['Low'], window1=9, window2=26, fillna=True)
+    #     df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
+    #         high=df_cleaned['High'], low=df_cleaned['Low'], window2=26, window3=52, fillna=True)
+    # except Exception as e:
+    #     st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
+    # Ensure columns are added even if calculation fails to prevent KeyError later
+    df_cleaned.loc[:, 'ichimoku_a'] = pd.NA
+    df_cleaned.loc[:, 'ichimoku_b'] = pd.NA
+    df_cleaned.loc[:, 'ichimoku_conversion_line'] = pd.NA
+    df_cleaned.loc[:, 'ichimoku_base_line'] = pd.NA
+    # --- End Ichimoku Cloud Calculation (DISABLED) ---
 
     try: df_cleaned.loc[:, 'psar'] = ta.trend.PSARIndicator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']).psar()
     except Exception as e: st.warning(f"Could not calculate Parabolic SAR: {e}", icon="⚠️")
@@ -195,8 +171,8 @@ def generate_signals_for_row(row_data, selection, full_df=None, is_intraday=Fals
 
     if selection.get("EMA Trend") and 'EMA50' in row_data and not pd.isna(row_data["EMA50"]):
         signals["Uptrend (21>50>200 EMA)"] = row_data["EMA50"] > row_data["EMA200"] and row_data["EMA21"] > row_data["EMA50"]
-    if selection.get("Ichimoku Cloud") and 'ichimoku_a' in row_data and not pd.isna(row_data["ichimoku_a"]):
-        signals["Bullish Ichimoku"] = row_data['Close'] > row_data['ichimoku_a'] and row_data['Close'] > row_data['ichimoku_b']
+    # if selection.get("Ichimoku Cloud") and 'ichimoku_a' in row_data and not pd.isna(row_data["ichimoku_a"]):
+    #     signals["Bullish Ichimoku"] = row_data['Close'] > row_data['ichimoku_a'] and row_data['Close'] > row_data['ichimoku_b']
     if selection.get("Parabolic SAR") and 'psar' in row_data and not pd.isna(row_data["psar"]):
         signals["Bullish PSAR"] = row_data['Close'] > row_data['psar']
     if selection.get("ADX") and 'adx' in row_data and not pd.isna(row_data["adx"]):
@@ -216,10 +192,11 @@ def generate_signals_for_row(row_data, selection, full_df=None, is_intraday=Fals
     return signals
 
 # === Backtesting Logic ===
-def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, reward_risk_ratio=2.0):
+def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, reward_risk_ratio=2.0, signal_threshold_percentage=0.7):
     """
     Simulates trades based on selected indicators and a simple entry/exit strategy.
     Assumes df_historical_calculated has all indicators pre-calculated and NaNs handled.
+    signal_threshold_percentage: % of selected bullish signals that must be active for entry.
     """
     trades = []
     in_trade = False
@@ -238,7 +215,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
     for key, selected in selection.items():
         if selected:
             if key == "EMA Trend": required_cols_for_signals.extend(["EMA21", "EMA50", "EMA200"])
-            elif key == "Ichimoku Cloud": required_cols_for_signals.extend(["ichimoku_a", "ichimoku_b", "ichimoku_conversion_line", "ichimoku_base_line"])
+            # elif key == "Ichimoku Cloud": required_cols_for_signals.extend(["ichimoku_a", "ichimoku_b", "ichimoku_conversion_line", "ichimoku_base_line"]) # DISABLED
             elif key == "Parabolic SAR": required_cols_for_signals.append("psar")
             elif key == "ADX": required_cols_for_signals.append("adx")
             elif key == "RSI Momentum": required_cols_for_signals.append("RSI")
@@ -249,9 +226,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
             elif key == "OBV": required_cols_for_signals.append("obv")
             # VWAP is handled by is_intraday in calculate_indicators, and backtest is always daily
             # So, we only include it if it's explicitly selected AND the data is intraday.
-            # For daily backtest, VWAP column will be pd.NA, so we don't need it as a *required* column for signals
-            # unless we specifically want to filter out rows where it's NA.
-            # Given backtest is daily, VWAP will be NA, so we should not include it here.
+            # For daily backtest, VWAP column will be NA, so we should not include it here.
             # The signal_indicator_keys filtering below already handles this.
             # No need to add "VWAP" to required_cols_for_signals for daily backtest.
 
@@ -273,17 +248,20 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
         st.warning(f"Backtest cannot proceed: Missing required columns in historical data: {missing_cols}. This might be due to indicator calculation failures or a non-intraday backtest trying to use intraday-only indicators like VWAP.", icon="⚠️")
         return [], 0, 0
 
-    first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
+    # Drop rows with NaNs only for the required columns for backtesting
+    df_historical_calculated_clean = df_historical_calculated.dropna(subset=required_cols_for_signals).copy()
+
+    first_valid_idx = df_historical_calculated_clean[required_cols_for_signals].first_valid_index()
     if first_valid_idx is None:
-        st.warning("No valid data points found after indicator calculation for backtesting (all required columns are NaN at the start).", icon="⚠️")
+        st.warning("No valid data points found after indicator calculation and cleaning for backtesting (all required columns are NaN at the start).", icon="⚠️")
         return [], 0, 0
 
-    start_i = df_historical_calculated.index.get_loc(first_valid_idx)
-    if start_i == 0: start_i = 1
+    start_i = df_historical_calculated_clean.index.get_loc(first_valid_idx)
+    if start_i == 0: start_i = 1 # Ensure we can look at prev_day_data
 
-    for i in range(start_i, len(df_historical_calculated)):
-        current_day_data = df_historical_calculated.iloc[i]
-        prev_day_data = df_historical_calculated.iloc[i-1]
+    for i in range(start_i, len(df_historical_calculated_clean)):
+        current_day_data = df_historical_calculated_clean.iloc[i]
+        prev_day_data = df_historical_calculated_clean.iloc[i-1]
 
         if pd.isna(prev_day_data.get('ATR')) or prev_day_data['ATR'] == 0:
             continue
@@ -300,7 +278,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
 
         if not in_trade:
             # Pass is_intraday=False for backtest as it's currently always daily
-            signals = generate_signals_for_row(prev_day_data, selection, df_historical_calculated.iloc[:i], is_intraday=False)
+            signals = generate_signals_for_row(prev_day_data, selection, df_historical_calculated_clean.iloc[:i], is_intraday=False)
 
             selected_and_fired_count = 0
             selected_indicator_count = 0
@@ -314,7 +292,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
                     selected_indicator_count += 1
                     actual_signal_name = ""
                     if indicator_key == "EMA Trend": actual_signal_name = "Uptrend (21>50>200 EMA)"
-                    elif indicator_key == "Ichimoku Cloud": actual_signal_name = "Bullish Ichimoku"
+                    # elif indicator_key == "Ichimoku Cloud": actual_signal_name = "Bullish Ichimoku" # DISABLED
                     elif indicator_key == "Parabolic SAR": actual_signal_name = "Bullish PSAR"
                     elif indicator_key == "ADX": actual_signal_name = "Strong Trend (ADX > 25)"
                     elif indicator_key == "RSI Momentum": actual_signal_name = "Bullish Momentum (RSI > 50)"
@@ -328,7 +306,8 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
                     if actual_signal_name and signals.get(actual_signal_name, False):
                         selected_and_fired_count += 1
             
-            if selected_indicator_count > 0 and selected_and_fired_count == selected_indicator_count:
+            # --- Modified Entry Condition ---
+            if selected_indicator_count > 0 and (selected_and_fired_count / selected_indicator_count) >= signal_threshold_percentage:
                 entry_price = current_day_data['Open']
                 if not pd.isna(prev_day_data['ATR']) and prev_day_data['ATR'] > 0:
                     stop_loss = entry_price - (prev_day_data['ATR'] * atr_multiplier)
@@ -337,9 +316,9 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
                     in_trade = True
 
     if in_trade:
-        final_exit_price = df_historical_calculated.iloc[-1]['Close']
+        final_exit_price = df_historical_calculated_clean.iloc[-1]['Close']
         pnl = final_exit_price - entry_price
-        trades.append({"Date": df_historical_calculated.index[-1].strftime('%Y-%m-%d'), "Type": "Exit (End of Backtest)", "Price": round(final_exit_price, 2), "Entry Price": round(entry_price, 2), "PnL": round(pnl, 2)})
+        trades.append({"Date": df_historical_calculated_clean.index[-1].strftime('%Y-%m-%d'), "Type": "Exit (End of Backtest)", "Price": round(final_exit_price, 2), "Entry Price": round(entry_price, 2), "PnL": round(pnl, 2)})
 
     wins = len([t for t in trades if t['Type'] == 'Exit (Win)'])
     losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])

@@ -8,7 +8,7 @@ import yfinance as yf # Ensure yfinance is imported here
 import os # For chart saving/removing, though direct plot is preferred
 
 # Import functions from utils.py
-from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data
+from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points # Import calculate_pivot_points here
 
 # === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, description, ideal_value_desc, selected, signals_dict):
@@ -39,7 +39,7 @@ def format_indicator_display(signal_key, current_value, description, ideal_value
     )
 
 # === Dashboard Tab Display Functions ===
-def display_main_analysis_tab(ticker, df, info, params, selection, overall_confidence, scores, final_weights, sentiment_score, expert_score):
+def display_main_analysis_tab(ticker, df, info, params, selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots):
     """Displays the main technical analysis and confidence score tab."""
     is_intraday = params['interval'] in ['5m', '60m']
     last = df.iloc[-1]
@@ -66,12 +66,13 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
                 "21 EMA > 50 EMA > 200 EMA",
                 selection.get("EMA Trend"), signals
             ))
-            st.markdown(format_indicator_display(
-                "Bullish Ichimoku", None,
-                "The Ichimoku Cloud is a comprehensive indicator that defines support and resistance, identifies trend direction, and gauges momentum. A bullish signal occurs when the price is above the cloud, indicating an uptrend.",
-                "Price > Ichimoku Cloud",
-                selection.get("Ichimoku Cloud"), signals
-            ))
+            # Ichimoku Cloud is disabled, so no display here
+            # st.markdown(format_indicator_display(
+            #     "Bullish Ichimoku", None,
+            #     "The Ichimoku Cloud is a comprehensive indicator that defines support and resistance, identifies trend direction, and gauges momentum. A bullish signal occurs when the price is above the cloud, indicating an uptrend.",
+            #     "Price > Ichimoku Cloud",
+            #     selection.get("Ichimoku Cloud"), signals
+            # ))
             st.markdown(format_indicator_display(
                 "Bullish PSAR", last.get('psar'),
                 "Parabolic Stop and Reverse (PSAR) is a time and price based trading system used to identify potential reversals in the price movement of traded assets. Bullish when dots are below price.",
@@ -95,7 +96,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
             st.markdown(format_indicator_display(
                 "Bullish Stoch Cross", last.get('stoch_k'),
                 "The Stochastic Oscillator is a momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period. A bullish cross occurs when %K (fast line) crosses above %D (slow line), often below 50.",
-                "%K line crosses above %D line (preferably below 50)",
+                "%K line crosses above %D (preferably below 50)",
                 selection.get("Stochastic"), signals
             ))
             st.markdown(format_indicator_display(
@@ -129,7 +130,44 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
                     "Price > VWAP",
                     selection.get("VWAP"), signals
                 ))
-    
+        
+        with st.expander("📊 Display-Only Indicators Status"):
+            # Bollinger Bands Status
+            if selection.get("Bollinger Bands"):
+                if 'BB_high' in last and 'BB_low' in last and not pd.isna(last['BB_high']) and not pd.isna(last['BB_low']):
+                    if last['Close'] > last['BB_high']:
+                        bb_status = '🔴 **Price Above Upper Band** (Overbought/Strong Uptrend)'
+                    elif last['Close'] < last['BB_low']:
+                        bb_status = '🟢 **Price Below Lower Band** (Oversold/Strong Downtrend)'
+                    else:
+                        bb_status = '🟡 **Price Within Bands** (Neutral/Consolidation)'
+                    st.markdown(f"**Bollinger Bands:** {bb_status}")
+                else:
+                    st.info("Bollinger Bands data not available for display.")
+
+            # Pivot Points Status
+            if selection.get("Pivot Points") and not is_intraday: # Pivot Points are for daily/weekly
+                if not df_pivots.empty and len(df_pivots) > 1:
+                    last_pivot = df_pivots.iloc[-1] # This is the pivot for the current day (calculated from previous day's data)
+                    if 'Pivot' in last_pivot and not pd.isna(last_pivot['Pivot']):
+                        if last['Close'] > last_pivot['R1']:
+                            pivot_status = '🟢 **Price Above R1** (Strong Bullish)'
+                        elif last['Close'] > last_pivot['Pivot']:
+                            pivot_status = '🟡 **Price Above Pivot** (Bullish)'
+                        elif last['Close'] < last_pivot['S1']:
+                            pivot_status = '🔴 **Price Below S1** (Strong Bearish)'
+                        elif last['Close'] < last_pivot['Pivot']:
+                            pivot_status = '🟡 **Price Below Pivot** (Bearish)'
+                        else:
+                            pivot_status = '⚪ **Price Near Pivot** (Neutral/Ranging)'
+                        st.markdown(f"**Pivot Points:** {pivot_status}")
+                    else:
+                        st.info("Pivot Points data not fully available for display.")
+                else:
+                    st.info("Pivot Points data not available for display or not enough history.")
+            elif selection.get("Pivot Points") and is_intraday:
+                st.info("Pivot Points are typically used for daily/weekly timeframes, not intraday.")
+
     with col2:
         st.subheader("📈 Price Chart")
         mav_tuple = (21, 50, 200) if selection.get("EMA Trend") else None
@@ -198,7 +236,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 option_metrics_buy = [
                     {"Metric": "Strike", "Value": f"${rec_option_buy.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
                     {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
-                    {"Metric": "Last Price", "Value": f"${rec_option_buy.get('lastPrice', None):.2f}" if rec_option_buy.get('lastPrice') is not None and not pd.isna(rec_option_buy.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": f"Value ({ticker})", "Value": f"${rec_option_buy.get('lastPrice', None):.2f}" if rec_option_buy.get('lastPrice') is not None and not pd.isna(rec_option_buy.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Bid", "Value": f"${rec_option_buy.get('bid', None):.2f}" if rec_option_buy.get('bid') is not None and not pd.isna(rec_option_buy.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Ask", "Value": f"${rec_option_buy.get('ask', None):.2f}" if rec_option_buy.get('ask') is not None and not pd.isna(rec_option_buy.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option_buy.get('impliedVolatility', None):.2%}" if rec_option_buy.get('impliedVolatility') is not None and not pd.isna(rec_option_buy.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Buyers": "Lower is better"},
@@ -217,7 +255,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 option_metrics_sell = [
                     {"Metric": "Strike", "Value": f"${rec_option_sell.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Sellers": "Higher for calls, lower for puts"},
                     {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Sellers": "Shorter term (to maximize time decay)"},
-                    {"Metric": "Last Price", "Value": f"${rec_option_sell.get('lastPrice', None):.2f}" if rec_option_sell.get('lastPrice') is not None and not pd.isna(rec_option_sell.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Sellers": "Higher to enter"},
+                    {"Metric": f"Value ({ticker})", "Value": f"${rec_option_sell.get('lastPrice', None):.2f}" if rec_option_sell.get('lastPrice') is not None and not pd.isna(rec_option_sell.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Sellers": "Higher to enter"},
                     {"Metric": "Bid", "Value": f"${rec_option_sell.get('bid', None):.2f}" if rec_option_sell.get('bid') is not None and not pd.isna(rec_option_sell.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Sellers": "Higher to enter"},
                     {"Metric": "Ask", "Value": f"${rec_option_sell.get('ask', None):.2f}" if rec_option_sell.get('ask') is not None and not pd.isna(rec_option_sell.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Sellers": "Higher to enter"},
                     {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option_sell.get('impliedVolatility', None):.2%}" if rec_option_sell.get('impliedVolatility') is not None and not pd.isna(rec_option_sell.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Sellers": "Higher is better"},
@@ -236,7 +274,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 option_metrics = [
                     {"Metric": "Strike", "Value": f"${rec_option.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
                     {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
-                    {"Metric": "Last Price", "Value": f"${rec_option.get('lastPrice', None):.2f}" if rec_option.get('lastPrice') is not None and not pd.isna(rec_option.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": f"Value ({ticker})", "Value": f"${rec_option.get('lastPrice', None):.2f}" if rec_option.get('lastPrice') is not None and not pd.isna(rec_option.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Bid", "Value": f"${rec_option.get('bid', None):.2f}" if rec_option.get('bid') is not None and not pd.isna(rec_option.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Ask", "Value": f"${rec_option.get('ask', None):.2f}" if rec_option.get('ask') is not None and not pd.isna(rec_option.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option.get('impliedVolatility', None):.2%}" if rec_option.get('impliedVolatility') is not None and not pd.isna(rec_option.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Buyers": "Lower is better"},
@@ -273,23 +311,22 @@ def display_backtest_tab(ticker, selection):
     
     daily_hist, _ = get_data(ticker, "2y", "1d")
     if daily_hist is not None and not daily_hist.empty:
+        # Pass is_intraday=False to calculate_indicators for daily data
         daily_df_calculated = calculate_indicators(daily_hist.copy(), is_intraday=False)
-        daily_df_calculated = daily_df_calculated.dropna() # Ensure no NaNs after indicator calculation
+        # Removed .dropna() here, relying on backtest_strategy to handle NaNs via first_valid_idx
 
-        if len(daily_df_calculated) < 200: # Adjust threshold as needed
-            st.warning("Not enough complete historical data for robust backtesting after indicator calculation. (Need at least 200 data points after NaN removal).")
-        else:
-            trades, wins, losses = backtest_strategy(daily_df_calculated, selection)
-            total_trades = wins + losses
-            win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Trades Simulated", total_trades)
-            col2.metric("Wins", wins)
-            col3.metric("Win Rate", f"{win_rate:.1f}%")
-            
-            if trades: st.dataframe(pd.DataFrame(trades).tail(20))
-            else: st.info("No trades were executed based on the current strategy and historical data. Try adjusting indicators or timeframes.")
+        # Pass the selection directly to backtest_strategy
+        trades, wins, losses = backtest_strategy(daily_df_calculated, selection)
+        total_trades = wins + losses
+        win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
+        
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Trades Simulated", total_trades)
+        col2.metric("Wins", wins)
+        col3.metric("Win Rate", f"{win_rate:.1f}%")
+        
+        if trades: st.dataframe(pd.DataFrame(trades).tail(20))
+        else: st.info("No trades were executed based on the current strategy and historical data. Try adjusting indicators or timeframes.")
     else:
         st.warning("Could not fetch daily data for backtesting or data is empty.")
 

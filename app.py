@@ -35,7 +35,7 @@ except ImportError as e:
 
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
-st.title("🚀 Aatif's AI-Powered Trading Hub") # Removed '#' from title as it's a markdown element, not part of string
+st.title("🚀 Aatif's AI-Powered Trading Hub")
 
 # === Constants and Configuration ===
 LOG_FILE = "trade_log.csv" # Define here or pass from a config module
@@ -49,7 +49,7 @@ st.sidebar.header("🔧 Technical Indicator Selection")
 with st.sidebar.expander("Trend Indicators", expanded=True):
     indicator_selection = {
         "EMA Trend": st.checkbox("EMA Trend (21, 50, 200)", value=True),
-        "Ichimoku Cloud": st.checkbox("Ichimoku Cloud", value=True),
+        "Ichimoku Cloud": st.checkbox("Ichimoku Cloud", value=False, disabled=True), # Disabled Ichimoku
         "Parabolic SAR": st.checkbox("Parabolic SAR", value=True),
         "ADX": st.checkbox("ADX", value=True),
     }
@@ -109,10 +109,12 @@ if ticker:
             st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
         else:
             # Calculate indicators once for the main display
-            # Pass is_intraday status to calculate_indicators
             is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
             df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
             
+            # Calculate pivot points separately for display
+            df_pivots = calculate_pivot_points(hist_data.copy()) # Use original hist_data for pivots
+
             if df_calculated.empty:
                 st.warning("No data available after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
                 st.stop()
@@ -137,7 +139,8 @@ if ticker:
             main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
             with main_tab:
-                display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score)
+                # Pass df_pivots to main analysis tab for display
+                display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots)
             
             with trade_tab:
                 display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
