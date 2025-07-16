@@ -181,6 +181,12 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
         }.get(key, [])
     ]
     if "ATR" not in required_cols_for_signals: required_cols_for_signals.append("ATR")
+    # In utils.py, inside backtest_strategy
+# ...
+print("Columns in df_historical_calculated:", df_historical_calculated.columns)
+print("Required columns for signals:", required_cols_for_signals)
+# ...
+first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
     
     first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
     if first_valid_idx is None:
