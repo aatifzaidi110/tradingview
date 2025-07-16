@@ -1,23 +1,16 @@
 # display_components.py
-# display_components.py
+
 import streamlit as st
 import pandas as pd
-import mplfinance as mpf  # Fixed typo
+import mplfinance as mpf
 import matplotlib.pyplot as plt
-import yfinance as yf
-import os
-# Import functions from utils.py
-from utils import (
-    backtest_strategy,
-    calculate_indicators,
-    generate_signals_for_row,
-    generate_option_trade_plan,
-    get_options_chain,
-    get_data,
-    get_finviz_data  # Fixed spelling
-)
+import yfinance as yf # Ensure yfinance is imported here
+import os # For chart saving/removing, though direct plot is preferred
 
-# Helper for Indicator Display
+# Import functions from utils.py
+from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data
+
+# === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, description, ideal_value_desc, selected, signals_dict):
     """
     Formats and displays a single technical indicator's information.
@@ -25,14 +18,14 @@ def format_indicator_display(signal_key, current_value, description, ideal_value
     if not selected:
         return ""
     
-    is_fired = signals_dict.get(signal_key, False)  # Fixed False
+    is_fired = signals_dict.get(signal_key, False)
     status_icon = '🟢' if is_fired else '🔴'
     display_name = signal_key.split('(')[0].strip()
 
     value_str = ""
-    if current_value is not None and not pd.isna(current_value):  # Fixed isma to isna
+    if current_value is not None and not pd.isna(current_value):
         if isinstance(current_value, (int, float)):
-            value_str = f"Current: `{current_value:.2f}`"  # Fixed quotes
+            value_str = f"Current: `{current_value:.2f}`"
         else:
             value_str = "Current: N/A"
     else:
@@ -44,8 +37,6 @@ def format_indicator_display(signal_key, current_value, description, ideal_value
         f"   - *Ideal (Bullish):* {ideal_value_desc}\n"
         f"   - *{value_str}*\n"
     )
-
-# Remove the corrupted lines at the bottom
 
 # === Dashboard Tab Display Functions ===
 def display_main_analysis_tab(ticker, df, info, params, selection, overall_confidence, scores, final_weights, sentiment_score, expert_score):
@@ -184,6 +175,8 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
         st.warning("No options data available for this ticker.")
     else:
         trade_plan = generate_option_trade_plan(ticker, overall_confidence, last['Close'], expirations)
+        
+        # --- Start of new detailed options display ---
         if trade_plan['status'] == 'success':
             st.success(f"**Recommended Strategy: {trade_plan['Strategy']}** (Confidence: {overall_confidence:.0f}%)")
             st.info(trade_plan['Reason'])
@@ -194,50 +187,71 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 col2.metric("Sell Strike", trade_plan['Sell Strike'])
                 col3.metric("Expiration", trade_plan['Expiration'])
                 col4.metric("Net Debit", trade_plan['Net Debit'])
-                col5.metric("Max Profit / Max Risk", f"{trade_plan['Max Profit']:.2f} / {trade_plan['Max Risk']:.2f}")
+                col5.metric("Max Profit / Max Risk", f"{trade_plan['Max Profit']} / {trade_plan['Max Risk']}")
                 st.write(f"**Reward / Risk:** `{trade_plan['Reward / Risk']}`")
                 st.markdown("---")
                 st.subheader("🔬 Recommended Option Deep-Dive (Spread Legs)")
+                
                 st.write("**Buy Leg:**")
                 rec_option_buy = trade_plan['Contracts']['Buy']
+                # Use .get() with a default value of None, then check for None or pd.isna
                 option_metrics_buy = [
-                    {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option_buy.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
-                    {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option_buy.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80"},
-                    {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option_buy.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
-                    {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option_buy.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
-                    {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option_buy.get('bid', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option_buy.get('ask', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option_buy.get('volume', 0):,}", "Ideal for Buyers": "Higher (>100)"},
+                    {"Metric": "Strike", "Value": f"${rec_option_buy.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
+                    {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
+                    {"Metric": "Last Price", "Value": f"${rec_option_buy.get('lastPrice', None):.2f}" if rec_option_buy.get('lastPrice') is not None and not pd.isna(rec_option_buy.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Bid", "Value": f"${rec_option_buy.get('bid', None):.2f}" if rec_option_buy.get('bid') is not None and not pd.isna(rec_option_buy.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Ask", "Value": f"${rec_option_buy.get('ask', None):.2f}" if rec_option_buy.get('ask') is not None and not pd.isna(rec_option_buy.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option_buy.get('impliedVolatility', None):.2%}" if rec_option_buy.get('impliedVolatility') is not None and not pd.isna(rec_option_buy.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Buyers": "Lower is better"},
+                    {"Metric": "Delta", "Value": f"{rec_option_buy.get('delta', None):.2f}" if rec_option_buy.get('delta') is not None and not pd.isna(rec_option_buy.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
+                    {"Metric": "Theta", "Value": f"{rec_option_buy.get('theta', None):.3f}" if rec_option_buy.get('theta') is not None and not pd.isna(rec_option_buy.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Buyers": "As low as possible"},
+                    {"Metric": "Gamma", "Value": f"{rec_option_buy.get('gamma', None):.3f}" if rec_option_buy.get('gamma') is not None and not pd.isna(rec_option_buy.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Buyers": "Higher for directional plays"},
+                    {"Metric": "Vega", "Value": f"{rec_option_buy.get('vega', None):.3f}" if rec_option_buy.get('vega') is not None and not pd.isna(rec_option_buy.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Buyers": "Lower if IV expected to fall"},
+                    {"Metric": "Rho", "Value": f"{rec_option_buy.get('rho', None):.3f}" if rec_option_buy.get('rho') is not None and not pd.isna(rec_option_buy.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Less significant for short-term"},
+                    {"Metric": "Open Interest", "Value": f"{rec_option_buy.get('openInterest', None):,}" if rec_option_buy.get('openInterest') is not None and not pd.isna(rec_option_buy.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
+                    {"Metric": "Volume (Today)", "Value": f"{rec_option_buy.get('volume', None):,}" if rec_option_buy.get('volume') is not None and not pd.isna(rec_option_buy.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                 ]
                 st.table(pd.DataFrame(option_metrics_buy).set_index("Metric"))
 
                 st.write("**Sell Leg:**")
                 rec_option_sell = trade_plan['Contracts']['Sell']
                 option_metrics_sell = [
-                    {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option_sell.get('impliedVolatility', 0):.2%}", "Ideal for Sellers": "Higher is better"},
-                    {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option_sell.get('delta', 0):.2f}", "Ideal for Sellers": "Lower (0.20-0.40)"},
-                    {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option_sell.get('theta', 0):.3f}", "Ideal for Sellers": "Higher (more decay)"},
-                    {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option_sell.get('openInterest', 0):,}", "Ideal for Sellers": "> 100s"},
-                    {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option_sell.get('bid', 0):.2f}", "Ideal for Sellers": "Higher to exit"},
-                    {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option_sell.get('ask', 0):.2f}", "Ideal for Sellers": "Higher to exit"},
-                    {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option_sell.get('volume', 0):,}", "Ideal for Sellers": "Higher (>100)"},
+                    {"Metric": "Strike", "Value": f"${rec_option_sell.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Sellers": "Higher for calls, lower for puts"},
+                    {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Sellers": "Shorter term (to maximize time decay)"},
+                    {"Metric": "Last Price", "Value": f"${rec_option_sell.get('lastPrice', None):.2f}" if rec_option_sell.get('lastPrice') is not None and not pd.isna(rec_option_sell.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Sellers": "Higher to enter"},
+                    {"Metric": "Bid", "Value": f"${rec_option_sell.get('bid', None):.2f}" if rec_option_sell.get('bid') is not None and not pd.isna(rec_option_sell.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Sellers": "Higher to enter"},
+                    {"Metric": "Ask", "Value": f"${rec_option_sell.get('ask', None):.2f}" if rec_option_sell.get('ask') is not None and not pd.isna(rec_option_sell.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Sellers": "Higher to enter"},
+                    {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option_sell.get('impliedVolatility', None):.2%}" if rec_option_sell.get('impliedVolatility') is not None and not pd.isna(rec_option_sell.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Sellers": "Higher is better"},
+                    {"Metric": "Delta", "Value": f"{rec_option_sell.get('delta', None):.2f}" if rec_option_sell.get('delta') is not None and not pd.isna(rec_option_sell.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Sellers": "Lower (0.20-0.40) for defined risk spreads"},
+                    {"Metric": "Theta", "Value": f"{rec_option_sell.get('theta', None):.3f}" if rec_option_sell.get('theta') is not None and not pd.isna(rec_option_sell.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Sellers": "Higher (more decay)"},
+                    {"Metric": "Gamma", "Value": f"{rec_option_sell.get('gamma', None):.3f}" if rec_option_sell.get('gamma') is not None and not pd.isna(rec_option_sell.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Sellers": "Lower for stability"},
+                    {"Metric": "Vega", "Value": f"{rec_option_sell.get('vega', None):.3f}" if rec_option_sell.get('vega') is not None and not pd.isna(rec_option_sell.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Sellers": "Higher if IV expected to fall"},
+                    {"Metric": "Rho", "Value": f"{rec_option_sell.get('rho', None):.3f}" if rec_option_sell.get('rho') is not None and not pd.isna(rec_option_sell.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Sellers": "Less significant for short-term"},
+                    {"Metric": "Open Interest", "Value": f"{rec_option_sell.get('openInterest', None):,}" if rec_option_sell.get('openInterest') is not None and not pd.isna(rec_option_sell.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Sellers": "> 100s"},
+                    {"Metric": "Volume (Today)", "Value": f"{rec_option_sell.get('volume', None):,}" if rec_option_sell.get('volume') is not None and not pd.isna(rec_option_sell.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Sellers": "Higher (>100)"},
                 ]
                 st.table(pd.DataFrame(option_metrics_sell).set_index("Metric"))
 
-            else: # Single Call strategy
+            else: # Single Call strategy (Buy ITM Call or Buy ATM Call)
                 rec_option = trade_plan['Contract']
                 option_metrics = [
-                    {"Metric": "Implied Volatility (IV)", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Value": f"{rec_option.get('impliedVolatility', 0):.2%}", "Ideal for Buyers": "Lower is better"},
-                    {"Metric": "Delta", "Description": "Option's price change per $1 stock change.", "Value": f"{rec_option.get('delta', 0):.2f}", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
-                    {"Metric": "Theta", "Description": "Time decay. Daily value lost from the premium.", "Value": f"{rec_option.get('theta', 0):.3f}", "Ideal for Buyers": "As low as possible"},
-                    {"Metric": "Open Interest", "Description": "Total open contracts. High OI indicates good liquidity.", "Value": f"{rec_option.get('openInterest', 0):,}", "Ideal for Buyers": "> 100s"},
-                    {"Metric": "Bid", "Description": "The price buyers are willing to pay.", "Value": f"{rec_option.get('bid', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Ask", "Description": "The price sellers are willing to accept.", "Value": f"{rec_option.get('ask', 0):.2f}", "Ideal for Buyers": "Lower to enter"},
-                    {"Metric": "Volume (Today)", "Description": "Number of contracts traded today.", "Value": f"{rec_option.get('volume', 0):,}", "Ideal for Buyers": "Higher (>100)"},
+                    {"Metric": "Strike", "Value": f"${rec_option.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
+                    {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
+                    {"Metric": "Last Price", "Value": f"${rec_option.get('lastPrice', None):.2f}" if rec_option.get('lastPrice') is not None and not pd.isna(rec_option.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Bid", "Value": f"${rec_option.get('bid', None):.2f}" if rec_option.get('bid') is not None and not pd.isna(rec_option.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Ask", "Value": f"${rec_option.get('ask', None):.2f}" if rec_option.get('ask') is not None and not pd.isna(rec_option.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option.get('impliedVolatility', None):.2%}" if rec_option.get('impliedVolatility') is not None and not pd.isna(rec_option.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Buyers": "Lower is better"},
+                    {"Metric": "Delta", "Value": f"{rec_option.get('delta', None):.2f}" if rec_option.get('delta') is not None and not pd.isna(rec_option.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
+                    {"Metric": "Theta", "Value": f"{rec_option.get('theta', None):.3f}" if rec_option.get('theta') is not None and not pd.isna(rec_option.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Buyers": "As low as possible"},
+                    {"Metric": "Gamma", "Value": f"{rec_option.get('gamma', None):.3f}" if rec_option.get('gamma') is not None and not pd.isna(rec_option.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Buyers": "Higher for directional plays"},
+                    {"Metric": "Vega", "Value": f"{rec_option.get('vega', None):.3f}" if rec_option.get('vega') is not None and not pd.isna(rec_option.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Buyers": "Lower if IV expected to fall"},
+                    {"Metric": "Rho", "Value": f"{rec_option.get('rho', None):.3f}" if rec_option.get('rho') is not None and not pd.isna(rec_option.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Less significant for short-term"},
+                    {"Metric": "Open Interest", "Value": f"{rec_option.get('openInterest', None):,}" if rec_option.get('openInterest') is not None and not pd.isna(rec_option.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
+                    {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                 ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
         else:
             st.warning(trade_plan['message'])
+        # --- End of new detailed options display ---
         
         st.markdown("---")
         st.subheader("⛓️ Full Option Chain")
@@ -245,7 +259,6 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
         exp_date_str = st.selectbox("Select Expiration Date to View", expirations)
         if exp_date_str:
             calls, puts = get_options_chain(ticker, exp_date_str)
-            # Removed the general get_options_suggestion, as detailed plan is above
             st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
             
             chain_to_display = calls if option_type == "Calls" else puts
@@ -306,27 +319,5 @@ def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     st.subheader("📝 Log Your Trade Analysis")
     user_notes = st.text_area("Add your personal notes or trade thesis here:")
     
-    # === Trade Log Saving Logic (TO BE IMPLEMENTED) ===
-    # This is a placeholder. You'll need to implement the actual saving and loading.
-    # Example structure for saving:
-    # if st.button("Save Trade Log"):
-    #     if not os.path.exists(LOG_FILE):
-    #         pd.DataFrame(columns=["Date", "Ticker", "Timeframe", "Confidence", "Notes"]).to_csv(LOG_FILE, index=False)
-    #     
-    #     current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    #     new_log_entry = pd.DataFrame([{
-    #         "Date": current_date,
-    #         "Ticker": ticker,
-    #         "Timeframe": timeframe,
-    #         "Confidence": f"{overall_confidence:.0f}",
-    #         "Notes": user_notes
-    #     }])
-    #     new_log_entry.to_csv(LOG_FILE, mode='a', header=False, index=False)
-    #     st.success("Trade log saved!")
-    #     st.dataframe(pd.read_csv(LOG_FILE)) # Display the updated log
-    # else:
-    #     if os.path.exists(LOG_FILE):
-    #         st.dataframe(pd.read_csv(LOG_FILE))
-    #     else:
-    #         st.info("No trade logs yet. Save your first entry!")
     st.info("Trade log functionality is pending implementation.")
+
