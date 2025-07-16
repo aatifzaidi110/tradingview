@@ -1,4 +1,4 @@
-# utils.py - Version 1.2
+# utils.py - Version 1.3
 
 import streamlit as st
 import yfinance as yf
@@ -17,7 +17,7 @@ except LookupError: # Catch LookupError if the resource is not found
     nltk.download('vader_lexicon')
 
 # === Data Fetching Functions ===
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=3600) # Increased TTL to 1 hour
 def get_finviz_data(ticker):
     """Fetches analyst recommendations and news sentiment from Finviz."""
     url = f"https://finviz.com/quote.ashx?t={ticker}"
@@ -38,7 +38,7 @@ def get_finviz_data(ticker):
         st.error(f"Error fetching Finviz data: {e}", icon="🚫")
         return {"recom": "N/A", "headlines": [], "sentiment_compound": 0}
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300) # Increased TTL to 5 minutes
 def get_data(symbol, period, interval):
     """Fetches historical stock data and basic info from Yahoo Finance."""
     with st.spinner(f"Fetching {period} of {interval} data for {symbol}..."):
