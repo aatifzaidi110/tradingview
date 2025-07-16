@@ -3,6 +3,7 @@ import sys
 import os
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt  # Needed for plt.close() in display_components
 print("Current working directory:", os.getcwd())
 print("Directory contents:", os.listdir())
 print("=== DEBUG INFO ===")
@@ -11,11 +12,10 @@ print("Directory contents:", os.listdir())
 print("Python path:", sys.path)
 print("=================")
 
-import matplotlib.pyplot as plt # Needed for plt.close() in display_components
-import sys
+# Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import functions from your new modules
+# Import functions from modules
 from utils import (
     get_finviz_data, get_data, get_options_chain,
     calculate_indicators, calculate_pivot_points,
@@ -30,12 +30,13 @@ try:
 except ImportError as e:
     print("Import error details:", str(e))
     raise
+
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
-st.title("🚀 Aatif's AI-Powered Trading Hub")
+st.title("# Aatif's AI-Powered Trading Hub")
 
 # === Constants and Configuration ===
-LOG_FILE = "trade_log.csv" # Define here or pass from a config module
+LOG_FILE = "trade_log.csv"  # Define here or pass from a config module
 
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
