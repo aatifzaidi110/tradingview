@@ -144,12 +144,9 @@ else:
                 overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
 
                 # Display tabs
-                # To avoid re-rendering all tabs for each ticker, we can put them inside an expander
-                # or just display them sequentially. For now, sequential display for clarity.
-                
-                # Use a unique key for each set of tabs to prevent Streamlit errors when looping
+                # Removed the 'key' argument as it's not supported in older Streamlit versions
                 tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list, key=f"tabs_{ticker}")
+                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
                 with main_tab:
                     display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score_current, expert_score_current, df_pivots)
