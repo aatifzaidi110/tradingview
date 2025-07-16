@@ -13,7 +13,7 @@ import nltk
 # --- NLTK VADER Lexicon Download ---
 try:
     nltk.data.find('sentiment/vader_lexicon.zip')
-except LookupError:
+except LookupError: # Catch LookupError if the resource is not found
     nltk.download('vader_lexicon')
 
 # === Data Fetching Functions ===
@@ -73,8 +73,8 @@ def calculate_indicators(df, is_intraday=False):
 
     # --- Corrected Ichimoku Cloud Calculation (using direct functions) ---
     try:
-        # Calculate Ichimoku components using direct functions from ta.trend
-        # This avoids issues with the IchimokuIndicator class's constructor arguments.
+        # For ta 0.11.0, Ichimoku components are often calculated using direct functions
+        # which take high, low, close, and window parameters.
         df_cleaned.loc[:, 'ichimoku_conversion_line'] = ta.trend.ichimoku_conversion_line(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
@@ -87,22 +87,22 @@ def calculate_indicators(df, is_intraday=False):
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
             close=df_cleaned['Close'],
-            window1=9,
-            window2=26,
+            window1=9, # conversion_line uses window1
+            window2=26, # base_line uses window2
             fillna=True
         )
         df_cleaned.loc[:, 'ichimoku_a'] = ta.trend.ichimoku_a(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            window1=9,
-            window2=26,
+            window1=9, # window1 for tenkan
+            window2=26, # window2 for kijun
             fillna=True
         )
         df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            window2=26, # This is the window_b parameter for ichimoku_b
-            window3=52, # This is the window_c parameter for ichimoku_b
+            window2=26, # window2 for kijun
+            window3=52, # window3 for senkou span B
             fillna=True
         )
     except Exception as e:
@@ -349,10 +349,6 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
 EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell": 15, "Strong Sell": 0}
 
 def convert_compound_to_100_scale(compound_score): return int((compound_score + 1) * 50)
-
-# utils.py
-
-# ... (existing imports)
 
 def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     """Generates an options trade plan based on confidence and available expirations."""
