@@ -188,15 +188,15 @@ print("Required columns for signals:", required_cols_for_signals)
 # ...
 first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
     
-    first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
-    if first_valid_idx is None:
+first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
+if first_valid_idx is None:
         st.warning("No valid data points found after indicator calculation for backtesting.", icon="⚠️")
-        return [], 0, 0
+return [], 0, 0
 
-    start_i = df_historical_calculated.index.get_loc(first_valid_idx)
-    if start_i == 0: start_i = 1
+start_i = df_historical_calculated.index.get_loc(first_valid_idx)
+if start_i == 0: start_i = 1
 
-    for i in range(start_i, len(df_historical_calculated)):
+for i in range(start_i, len(df_historical_calculated)):
         current_day_data = df_historical_calculated.iloc[i]
         prev_day_data = df_historical_calculated.iloc[i-1]
 
@@ -247,14 +247,14 @@ first_valid_idx = df_historical_calculated[required_cols_for_signals].first_vali
                     trades.append({"Date": current_day_data.name.strftime('%Y-%m-%d'), "Type": "Entry", "Price": round(entry_price, 2)})
                     in_trade = True
 
-    if in_trade:
+if in_trade:
         final_exit_price = df_historical_calculated.iloc[-1]['Close']
         pnl = final_exit_price - entry_price
         trades.append({"Date": df_historical_calculated.index[-1].strftime('%Y-%m-%d'), "Type": "Exit (End of Backtest)", "Price": round(final_exit_price, 2), "Entry Price": round(entry_price, 2), "PnL": round(pnl, 2)})
 
-    wins = len([t for t in trades if t['Type'] == 'Exit (Win)'])
-    losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
-    return trades, wins, losses
+wins = len([t for t in trades if t['Type'] == 'Exit (Win)'])
+losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
+return trades, wins, losses
 
 # === Options Strategy Logic ===
 EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell": 15, "Strong Sell": 0}
