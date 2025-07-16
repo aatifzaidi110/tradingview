@@ -8,7 +8,15 @@ import requests
 from bs4 import BeautifulSoup
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from datetime import datetime, timedelta
+import nltk # Added for VADER lexicon download
 
+# --- NLTK VADER Lexicon Download ---
+# This block attempts to find the lexicon; if not found, it downloads it.
+try:
+    nltk.data.find('sentiment/vader_lexicon.zip')
+except nltk.downloader.DownloadError:
+    nltk.download('vader_lexicon')
+    
 # === Data Fetching Functions ===
 @st.cache_data(ttl=900)
 def get_finviz_data(ticker):
@@ -63,8 +71,48 @@ def calculate_indicators(df, is_intraday=False):
     # Use .loc for safe assignment to avoid SettingWithCopyWarning
     try: df_cleaned.loc[:, "EMA21"]=ta.trend.ema_indicator(df_cleaned["Close"],21); df_cleaned.loc[:, "EMA50"]=ta.trend.ema_indicator(df_cleaned["Close"],50); df_cleaned.loc[:, "EMA200"]=ta.trend.ema_indicator(df_cleaned["Close"],200)
     except Exception as e: st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
-    try: ichimoku = ta.trend.IchimokuIndicator(df_cleaned['High'], df_cleaned['Low'], window1=9, window2=26, window3=52, window4=26); df_cleaned.loc[:, 'ichimoku_a'] = ichimoku.ichimoku_a(); df_cleaned.loc[:, 'ichimoku_b'] = ichimoku.ichimoku_b()
-    except Exception as e: st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
+    # --- Ichimoku Cloud ---
+    try:
+        # Initialize IchimokuIndicator for conversion_line and base_line
+        # Note: 'window4' is not a standard parameter for IchimokuIndicator in ta v0.11.0 and recent.
+        # Remove it to avoid potential issues.
+        ichimoku = ta.trend.IchimokuIndicator(
+            high=df_cleaned['High'],
+            low=df_cleaned['Low'],
+            close=df_cleaned['Close'], # Ensure 'close' is also passed if used for conversions
+            window1=9,  # Conversion Line (Tenkan-sen)
+            window2=26, # Base Line (Kijun-sen)
+            window3=52, # Lagging Span 2 (Senkou Span B)
+            fillna=True
+        )
+
+        # Calculate Ichimoku A (Senkou Span A) and B (Senkou Span B) using direct functions
+        # from ta.trend, as they are not attributes of the IchimokuIndicator object directly.
+        df_cleaned.loc[:, 'ichimoku_a'] = ta.trend.ichimoku_a(
+            high=df_cleaned['High'],
+            low=df_cleaned['Low'],
+            window1=9,
+            window2=26,
+            fillna=True # Pass relevant window parameters for ichimoku_a calculation
+        )
+        df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
+            high=df_cleaned['High'],
+            low=df_cleaned['Low'],
+            window2=26, # window2 from IchimokuIndicator usually maps to window_b for ichimoku_b
+            window3=52, # window3 from IchimokuIndicator usually maps to window_c for ichimoku_b
+            fillna=True
+        )
+
+        # Assign conversion and base lines
+        df_cleaned.loc[:, 'ichimoku_conversion_line'] = ichimoku.ichimoku_conversion_line()
+        df_cleaned.loc[:, 'ichimoku_base_line'] = ichimoku.ichimoku_base_line()
+
+    except Exception as e:
+        st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
+        df_cleaned.loc[:, 'ichimoku_a'] = pd.NA
+        df_cleaned.loc[:, 'ichimoku_b'] = pd.NA
+        df_cleaned.loc[:, 'ichimoku_conversion_line'] = pd.NA
+        df_cleaned.loc[:, 'ichimoku_base_line'] = pd.NA
     try: df_cleaned.loc[:, 'psar'] = ta.trend.PSARIndicator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']).psar()
     except Exception as e: st.warning(f"Could not calculate Parabolic SAR: {e}", icon="⚠️")
     try: df_cleaned.loc[:, 'adx'] = ta.trend.ADXIndicator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']).adx()
