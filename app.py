@@ -4,6 +4,7 @@ import os
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt  # Needed for plt.close() in display_components
+import yfinance as yf
 print("Current working directory:", os.getcwd())
 print("Directory contents:", os.listdir())
 print("=== DEBUG INFO ===")
