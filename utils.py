@@ -350,11 +350,29 @@ EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell"
 
 def convert_compound_to_100_scale(compound_score): return int((compound_score + 1) * 50)
 
+
 # ... (imports and other functions)
 
 def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
-    # ... (existing code)
+    """Generates an options trade plan based on confidence and available expirations."""
+    if confidence < 60:
+        return {"status": "warning", "message": "Confidence score is too low. No options trade is recommended."}
+    
+    today = datetime.now()
+    suitable_expirations = []
+    for exp_str in expirations:
+        exp_date = datetime.strptime(exp_str, '%Y-%m-%d')
+        days_to_expiry = (exp_date - today).days
+        if 45 <= days_to_expiry <= 365: # Up to 1 year
+            suitable_expirations.append((days_to_expiry, exp_str))
+            
+    if not suitable_expirations:
+        return {"status": "warning", "message": "Could not find a suitable expiration date (45-365 days out)."}
+    
+    suitable_expirations.sort()
+    target_exp_date = suitable_expirations[0][1]
 
+    # --- Start of logic that uses target_exp_date ---
     calls, _ = get_options_chain(ticker, target_exp_date)
     if calls.empty:
         return {"status": "error", "message": f"No call options found for {target_exp_date}."}
@@ -365,19 +383,14 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
 
     if confidence >= 75:
         # Attempt Bull Call Spread
-        # --- MODIFIED: Add check for 'delta' column existence ---
         if 'delta' in calls.columns:
-            # Filter ITM calls based on 'inTheMoney' and 'delta'
             itm_calls = calls[(calls['inTheMoney']) & (calls['delta'] > 0.60)].sort_values(by='strike', ascending=False)
         else:
-            # Fallback if 'delta' column is missing: filter only by 'inTheMoney'
             st.warning("Delta data not available for options chain. Filtering ITM calls by 'inTheMoney' only.", icon="⚠️")
             itm_calls = calls[calls['inTheMoney']].sort_values(by='strike', ascending=False)
-        # --- END MODIFIED ---
 
         if not itm_calls.empty:
             buy_leg = itm_calls.iloc[0]
-            # ... (rest of your existing logic for spread and fallback)
             otm_calls_for_spread = calls[(calls['strike'] > buy_leg['strike']) & (calls['inTheMoney'] == False)].sort_values(by='strike', ascending=True)
             otm_calls_for_spread = otm_calls_for_spread[(otm_calls_for_spread['volume'] > 5) | (otm_calls_for_spread['openInterest'] > 10)]
 
