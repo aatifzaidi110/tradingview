@@ -14,7 +14,9 @@ import nltk # Added for VADER lexicon download
 # This block attempts to find the lexicon; if not found, it downloads it.
 try:
     nltk.data.find('sentiment/vader_lexicon.zip')
-except nltk.downloader.DownloadError:
+# Change the specific exception to a more general one like LookupError or Exception
+except LookupError: # LookupError is often raised when a resource is not found
+# Or you can use a more general 'except Exception:' if LookupError doesn't catch it
     nltk.download('vader_lexicon')
 
 # === Data Fetching Functions ===
