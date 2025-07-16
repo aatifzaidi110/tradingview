@@ -1,4 +1,4 @@
-# app.py
+# app.py - Version 1.3
 import sys
 import os
 import streamlit as st
@@ -27,7 +27,8 @@ from utils import (
 try:
     from display_components import (
         display_main_analysis_tab, display_trade_plan_options_tab,
-        display_backtest_tab, display_news_info_tab, display_trade_log_tab
+        display_backtest_tab, display_news_info_tab, display_trade_log_tab,
+        display_ticker_comparison_chart # Import the new comparison chart function
     )
 except ImportError as e:
     print("Import error details:", str(e))
@@ -36,6 +37,11 @@ except ImportError as e:
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
+
+# === Refresh Button ===
+if st.button("🔄 Refresh Data", help="Click to fetch the latest data for all tickers and re-run analysis."):
+    st.cache_data.clear() # Clear all cached data
+    st.rerun() # Rerun the app
 
 # === Constants and Configuration ===
 LOG_FILE = "trade_log.csv" # Define here or pass from a config module
@@ -92,12 +98,12 @@ TIMEFRAME_MAP = {
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
 
+comparison_data = [] # List to store data for the comparison chart
+
 if not tickers:
     st.info("Please enter at least one stock ticker in the sidebar to begin analysis.")
 else:
     for i, ticker in enumerate(tickers):
-        st.header(f"📈 Analysis for {ticker}")
-        
         # Re-calculate sentiment and expert scores for each ticker if automation is on
         if use_automation:
             finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
@@ -143,8 +149,16 @@ else:
                 
                 overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
 
+                # Collect data for comparison chart
+                current_price = last_row_for_signals['Close']
+                comparison_data.append({
+                    "Ticker": ticker,
+                    "Current Price": current_price,
+                    "Confidence Score": overall_confidence
+                })
+
+                st.subheader(f"📈 Analysis for {ticker}") # Move subheader here to be above tabs for each ticker
                 # Display tabs
-                # Removed the 'key' argument as it's not supported in older Streamlit versions
                 tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
                 main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
@@ -170,4 +184,9 @@ else:
         except Exception as e:
             st.error(f"An unexpected error occurred during data processing for {ticker}: {e}", icon="🚫")
             st.exception(e)
-
+    
+    # Display the comparison chart at the very top after all tickers are processed
+    if comparison_data:
+        st.header("📊 Ticker Comparison Overview")
+        display_ticker_comparison_chart(comparison_data)
+        st.markdown("---") # Add a separator after the comparison chart

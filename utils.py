@@ -1,4 +1,4 @@
-# utils.py
+# utils.py - Version 1.2
 
 import streamlit as st
 import yfinance as yf
@@ -101,11 +101,12 @@ def calculate_indicators(df, is_intraday=False):
     
     # --- Corrected CCI Calculation ---
     try:
-        if not (df_cleaned['High'] == df_cleaned['Low']).all() and not (df_cleaned['High'] == df_cleaned['Close']).all():
-            # Ensure 'cci' is called correctly from ta.momentum
+        # Check if ta.momentum has the cci attribute before calling
+        if hasattr(ta.momentum, 'cci') and not (df_cleaned['High'] == df_cleaned['Low']).all() and not (df_cleaned['High'] == df_cleaned['Close']).all():
             df_cleaned.loc[:, 'cci'] = ta.momentum.cci(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close'])
         else:
-            st.warning("CCI cannot be calculated due to invariant High/Low/Close prices.", icon="⚠️")
+            st.warning("CCI cannot be calculated due to invariant High/Low/Close prices or missing 'cci' attribute in ta.momentum.", icon="⚠️")
+            df_cleaned.loc[:, 'cci'] = pd.NA # Ensure column exists even if not calculated
     except Exception as e: st.warning(f"Could not calculate CCI: {e}", icon="⚠️")
     # --- End Corrected CCI Calculation ---
 

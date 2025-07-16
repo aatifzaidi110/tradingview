@@ -1,4 +1,4 @@
-# display_components.py - Version 1.3
+# display_components.py - Version 1.5
 
 import streamlit as st
 import pandas as pd
@@ -354,7 +354,44 @@ def display_news_info_tab(ticker, info, finviz_data):
 def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     """Displays and manages the trade log."""
     st.subheader("📝 Log Your Trade Analysis")
-    user_notes = st.text_area("Add your personal notes or trade thesis here:")
+    # Added a unique key for the text_area based on the ticker
+    user_notes = st.text_area("Add your personal notes or trade thesis here:", key=f"trade_notes_{ticker}")
     
     st.info("Trade log functionality is pending implementation.")
 
+def display_ticker_comparison_chart(comparison_data):
+    """
+    Displays a bar chart comparing tickers by current price and confidence score.
+    """
+    if not comparison_data:
+        st.info("No data available for comparison chart.")
+        return
+
+    df_comparison = pd.DataFrame(comparison_data)
+    df_comparison = df_comparison.set_index("Ticker")
+
+    # Create two columns for two charts
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Current Price Comparison")
+        fig_price, ax_price = plt.subplots(figsize=(8, 5))
+        df_comparison["Current Price"].plot(kind='bar', ax=ax_price, color='skyblue')
+        ax_price.set_title("Current Price by Ticker")
+        ax_price.set_ylabel("Price ($)")
+        ax_price.tick_params(axis='x', rotation=45)
+        st.pyplot(fig_price, clear_figure=True)
+        plt.close(fig_price)
+
+    with col2:
+        st.subheader("Confidence Score Comparison")
+        fig_confidence, ax_confidence = plt.subplots(figsize=(8, 5))
+        df_comparison["Confidence Score"].plot(kind='bar', ax=ax_confidence, color='lightgreen')
+        ax_confidence.set_title("Confidence Score by Ticker")
+        ax_confidence.set_ylabel("Score (0-100)")
+        ax_confidence.set_ylim(0, 100)
+        ax_confidence.tick_params(axis='x', rotation=45)
+        st.pyplot(fig_confidence, clear_figure=True)
+        plt.close(fig_confidence)
+
+    st.dataframe(df_comparison) # Display the raw data table as well
