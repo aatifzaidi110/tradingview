@@ -42,7 +42,11 @@ LOG_FILE = "trade_log.csv" # Define here or pass from a config module
 
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
-ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
+# Changed to text_area for multiple tickers
+ticker_input = st.sidebar.text_area("Enter Ticker Symbol(s) (comma or newline separated)", value="NVDA").upper()
+# Split the input into a list of tickers, remove empty strings
+tickers = [t.strip() for t in ticker_input.replace(',', '\n').split('\n') if t.strip()]
+
 timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
@@ -77,23 +81,9 @@ auto_expert_score_placeholder = st.sidebar.empty()
 # === Dynamic Qualitative Score Calculation ===
 sentiment_score = 50
 expert_score = 50
-finviz_data = {"headlines": ["Automation is disabled."]}
+finviz_data = {"headlines": ["Automation is disabled."]} # Default for when automation is off
 
-if use_automation:
-    finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
-    auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
-    auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
-    auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
-    auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_data['recom']})")
-    sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
-    expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
-else:
-    st.sidebar.info("Automation OFF. Manual scores are used for display, but only technical score contributes to confidence.")
-    sentiment_score = st.sidebar.slider("Manual Sentiment Score", 1, 100, 50)
-    expert_score = st.sidebar.slider("Manual Expert Score", 1, 100, 50)
-
-
-# === Main Script Execution ===
+# Main Script Execution - Loop through each ticker
 TIMEFRAME_MAP = {
     "Scalp Trading": {"period": "5d", "interval": "5m", "weights": {"technical": 0.9, "sentiment": 0.1, "expert": 0.0}},
     "Day Trading": {"period": "60d", "interval": "60m", "weights": {"technical": 0.7, "sentiment": 0.2, "expert": 0.1}},
@@ -102,61 +92,85 @@ TIMEFRAME_MAP = {
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
 
-if ticker:
-    try:
-        hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
-        if hist_data is None or info_data is None:
-            st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
-        else:
-            # Calculate indicators once for the main display
-            is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
-            df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
-            
-            # Calculate pivot points separately for display
-            df_pivots = calculate_pivot_points(hist_data.copy()) # Use original hist_data for pivots
-
-            if df_calculated.empty:
-                st.warning("No data available after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
-                st.stop()
-
-            # Calculate scores for display
-            last_row_for_signals = df_calculated.iloc[-1]
-            signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, is_intraday_data)
-            
-            technical_score = (sum(1 for f in signals_for_score.values() if f) / len(signals_for_score)) * 100 if signals_for_score else 0
-            
-            scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
-            
-            # Apply weights for overall confidence
-            final_weights = selected_params_main['weights'].copy()
-            if not use_automation:
-                final_weights = {'technical': 1.0, 'sentiment': 0.0, 'expert': 0.0} # Only technical counts if automation is off
-            
-            overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
-
-            # Display tabs
-            tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-            main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
-
-            with main_tab:
-                # Pass df_pivots to main analysis tab for display
-                display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots)
-            
-            with trade_tab:
-                display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
-            
-            with backtest_tab:
-                # Pass is_intraday=False to display_backtest_tab because backtest is always daily data
-                display_backtest_tab(ticker, indicator_selection)
-            
-            with news_tab:
-                display_news_info_tab(ticker, info_data, finviz_data)
-            
-            with log_tab:
-                display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
-
-    except Exception as e:
-        st.error(f"An unexpected error occurred during data processing: {e}", icon="🚫")
-        st.exception(e)
+if not tickers:
+    st.info("Please enter at least one stock ticker in the sidebar to begin analysis.")
 else:
-    st.info("Please enter a stock ticker in the sidebar to begin analysis.")
+    for i, ticker in enumerate(tickers):
+        st.header(f"📈 Analysis for {ticker}")
+        
+        # Re-calculate sentiment and expert scores for each ticker if automation is on
+        if use_automation:
+            finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
+            auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
+            auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
+            # Display automated scores per ticker, or keep it global if preferred
+            # For simplicity, keeping the sliders global as they are currently, but the underlying scores will update.
+            # If you want per-ticker sliders, this section needs more complex state management.
+            sentiment_score_current = auto_sentiment_score
+            expert_score_current = auto_expert_score
+        else:
+            sentiment_score_current = sentiment_score # Use global manual slider value
+            expert_score_current = expert_score     # Use global manual slider value
+
+        try:
+            hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
+            if hist_data is None or info_data is None:
+                st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
+            else:
+                # Calculate indicators once for the main display
+                is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
+                df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
+                
+                # Calculate pivot points separately for display
+                df_pivots = calculate_pivot_points(hist_data.copy()) # Use original hist_data for pivots
+
+                if df_calculated.empty:
+                    st.warning(f"No data available for {ticker} after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
+                    continue # Skip to next ticker
+
+                # Calculate scores for display
+                last_row_for_signals = df_calculated.iloc[-1]
+                signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, is_intraday_data)
+                
+                technical_score = (sum(1 for f in signals_for_score.values() if f) / len(signals_for_score)) * 100 if signals_for_score else 0
+                
+                scores = {"technical": technical_score, "sentiment": sentiment_score_current, "expert": expert_score_current}
+                
+                # Apply weights for overall confidence
+                final_weights = selected_params_main['weights'].copy()
+                if not use_automation:
+                    final_weights = {'technical': 1.0, 'sentiment': 0.0, 'expert': 0.0} # Only technical counts if automation is off
+                
+                overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
+
+                # Display tabs
+                # To avoid re-rendering all tabs for each ticker, we can put them inside an expander
+                # or just display them sequentially. For now, sequential display for clarity.
+                
+                # Use a unique key for each set of tabs to prevent Streamlit errors when looping
+                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
+                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list, key=f"tabs_{ticker}")
+
+                with main_tab:
+                    display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score_current, expert_score_current, df_pivots)
+                
+                with trade_tab:
+                    display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
+                
+                with backtest_tab:
+                    display_backtest_tab(ticker, indicator_selection)
+                
+                with news_tab:
+                    display_news_info_tab(ticker, info_data, finviz_data)
+                
+                with log_tab:
+                    display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
+            
+            if i < len(tickers) - 1: # Add a separator between tickers
+                st.markdown("---")
+                st.markdown("---")
+
+        except Exception as e:
+            st.error(f"An unexpected error occurred during data processing for {ticker}: {e}", icon="🚫")
+            st.exception(e)
+

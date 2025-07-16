@@ -293,8 +293,8 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
         
         st.markdown("---")
         st.subheader("⛓️ Full Option Chain")
-        option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True)
-        exp_date_str = st.selectbox("Select Expiration Date to View", expirations)
+        option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True, key=f"option_type_{ticker}") # Added unique key
+        exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}") # Added unique key
         if exp_date_str:
             calls, puts = get_options_chain(ticker, exp_date_str)
             st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
