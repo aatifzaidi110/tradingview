@@ -350,8 +350,9 @@ EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell"
 
 def convert_compound_to_100_scale(compound_score): return int((compound_score + 1) * 50)
 
+# utils.py
 
-# ... (imports and other functions)
+# ... (existing imports)
 
 def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     """Generates an options trade plan based on confidence and available expirations."""
@@ -366,13 +367,29 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
         if 45 <= days_to_expiry <= 365: # Up to 1 year
             suitable_expirations.append((days_to_expiry, exp_str))
             
-    if not suitable_expirations:
-        return {"status": "warning", "message": "Could not find a suitable expiration date (45-365 days out)."}
-    
-    suitable_expirations.sort()
-    target_exp_date = suitable_expirations[0][1]
+    target_exp_date = None # Initialize target_exp_date
 
-    # --- Start of logic that uses target_exp_date ---
+    if suitable_expirations:
+        suitable_expirations.sort()
+        target_exp_date = suitable_expirations[0][1]
+    else:
+        # Fallback: If no expirations found within 45-365 days, try the very next available one
+        if expirations:
+            # Sort all available expirations and pick the closest one
+            all_exp_dates = sorted([datetime.strptime(e, '%Y-%m-%d') for e in expirations])
+            if all_exp_dates:
+                target_exp_date = all_exp_dates[0].strftime('%Y-%m-%d')
+                st.info(f"No expirations found between 45-365 days. Falling back to nearest available expiration: {target_exp_date}", icon="ℹ️")
+            else:
+                return {"status": "warning", "message": "No expiration dates available for this ticker at all."}
+        else:
+            return {"status": "warning", "message": "No expiration dates available for this ticker at all."}
+
+    # If target_exp_date is still None here, something went wrong with fallback
+    if target_exp_date is None:
+        return {"status": "error", "message": "Could not determine a valid expiration date for options analysis."}
+
+    # --- Rest of the function (no changes needed here) ---
     calls, _ = get_options_chain(ticker, target_exp_date)
     if calls.empty:
         return {"status": "error", "message": f"No call options found for {target_exp_date}."}
