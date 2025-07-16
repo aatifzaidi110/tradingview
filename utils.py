@@ -16,7 +16,7 @@ try:
     nltk.data.find('sentiment/vader_lexicon.zip')
 except nltk.downloader.DownloadError:
     nltk.download('vader_lexicon')
-    
+
 # === Data Fetching Functions ===
 @st.cache_data(ttl=900)
 def get_finviz_data(ticker):
@@ -71,18 +71,18 @@ def calculate_indicators(df, is_intraday=False):
     # Use .loc for safe assignment to avoid SettingWithCopyWarning
     try: df_cleaned.loc[:, "EMA21"]=ta.trend.ema_indicator(df_cleaned["Close"],21); df_cleaned.loc[:, "EMA50"]=ta.trend.ema_indicator(df_cleaned["Close"],50); df_cleaned.loc[:, "EMA200"]=ta.trend.ema_indicator(df_cleaned["Close"],200)
     except Exception as e: st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
-    # --- Ichimoku Cloud ---
+
+    # --- Corrected Ichimoku Cloud Calculation ---
     try:
         # Initialize IchimokuIndicator for conversion_line and base_line
-        # Note: 'window4' is not a standard parameter for IchimokuIndicator in ta v0.11.0 and recent.
-        # Remove it to avoid potential issues.
+        # Removed 'window4' as it's not a standard parameter for ta v0.11.0
         ichimoku = ta.trend.IchimokuIndicator(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            close=df_cleaned['Close'], # Ensure 'close' is also passed if used for conversions
-            window1=9,  # Conversion Line (Tenkan-sen)
-            window2=26, # Base Line (Kijun-sen)
-            window3=52, # Lagging Span 2 (Senkou Span B)
+            close=df_cleaned['Close'],
+            window1=9,
+            window2=26,
+            window3=52,
             fillna=True
         )
 
@@ -93,13 +93,13 @@ def calculate_indicators(df, is_intraday=False):
             low=df_cleaned['Low'],
             window1=9,
             window2=26,
-            fillna=True # Pass relevant window parameters for ichimoku_a calculation
+            fillna=True
         )
         df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            window2=26, # window2 from IchimokuIndicator usually maps to window_b for ichimoku_b
-            window3=52, # window3 from IchimokuIndicator usually maps to window_c for ichimoku_b
+            window2=26,
+            window3=52,
             fillna=True
         )
 
@@ -109,10 +109,13 @@ def calculate_indicators(df, is_intraday=False):
 
     except Exception as e:
         st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
+        # Ensure columns are added even if calculation fails to prevent KeyError later
         df_cleaned.loc[:, 'ichimoku_a'] = pd.NA
         df_cleaned.loc[:, 'ichimoku_b'] = pd.NA
         df_cleaned.loc[:, 'ichimoku_conversion_line'] = pd.NA
         df_cleaned.loc[:, 'ichimoku_base_line'] = pd.NA
+    # --- End Corrected Ichimoku Cloud Calculation ---
+
     try: df_cleaned.loc[:, 'psar'] = ta.trend.PSARIndicator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']).psar()
     except Exception as e: st.warning(f"Could not calculate Parabolic SAR: {e}", icon="⚠️")
     try: df_cleaned.loc[:, 'adx'] = ta.trend.ADXIndicator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']).adx()
@@ -134,6 +137,8 @@ def calculate_indicators(df, is_intraday=False):
     if is_intraday:
         try: df_cleaned.loc[:, 'vwap'] = ta.volume.VolumeWeightedAveragePrice(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close'], df_cleaned['Volume']).volume_weighted_average_price()
         except Exception as e: st.warning(f"Could not calculate VWAP: {e}", icon="⚠️")
+    else: # If not intraday, ensure 'vwap' column exists with NA to prevent KeyError in backtest
+        df_cleaned.loc[:, 'vwap'] = pd.NA
     
     try: df_cleaned.loc[:, "ATR"]=ta.volatility.AverageTrueRange(df_cleaned["High"],df_cleaned["Low"],df_cleaned["Close"]).average_true_range()
     except Exception as e: st.warning(f"Could not calculate ATR: {e}", icon="⚠️")
@@ -164,13 +169,18 @@ def generate_signals_for_row(row_data, selection, full_df=None, is_intraday=Fals
     """Generates bullish/bearish signals for a single row of data based on selected indicators."""
     signals = {}
     
-    if selection.get("OBV") and 'obv' in row_data and full_df is not None and len(full_df) >= 10:
+    if selection.get("OBV") and 'obv' in row_data and not pd.isna(row_data['obv']) and full_df is not None and len(full_df) >= 10:
         try:
             current_index_loc = full_df.index.get_loc(row_data.name)
             if current_index_loc >= 10:
                 prev_data_for_rolling = full_df.iloc[current_index_loc - 10 : current_index_loc]
                 if not prev_data_for_rolling.empty and 'obv' in prev_data_for_rolling.columns:
-                    signals["OBV Rising"] = row_data['obv'] > prev_data_for_rolling['obv'].rolling(10).mean().iloc[-1]
+                    # Ensure the rolling mean is not NaN and has enough data
+                    obv_rolling_mean = prev_data_for_rolling['obv'].rolling(10).mean().iloc[-1]
+                    if not pd.isna(obv_rolling_mean):
+                        signals["OBV Rising"] = row_data['obv'] > obv_rolling_mean
+                    else:
+                        signals["OBV Rising"] = False
                 else:
                     signals["OBV Rising"] = False
             else:
@@ -220,31 +230,50 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
         st.info(f"Not enough complete historical data for robust backtesting after indicator calculation. (Need at least {min_data_points_for_backtest+1} data points after NaN removal). Found: {len(df_historical_calculated)}")
         return [], 0, 0
 
-    required_cols_for_signals = [
-        col for key, selected in selection.items() if selected for col in {
-            "EMA Trend": ["EMA21", "EMA50", "EMA200"], "Ichimoku Cloud": ["ichimoku_a", "ichimoku_b"],
-            "Parabolic SAR": ["psar"], "ADX": ["adx"], "RSI Momentum": ["RSI"],
-            "Stochastic": ["stoch_k", "stoch_d"], "CCI": ["cci"], "ROC": ["roc"],
-            "Volume Spike": ["Volume", "Vol_Avg_50"], "OBV": ["obv"], "VWAP": ["vwap"]
-        }.get(key, [])
-    ]
-    if "ATR" not in required_cols_for_signals: required_cols_for_signals.append("ATR")
-    # In utils.py, inside backtest_strategy
-# ...
-print("Columns in df_historical_calculated:", df_historical_calculated.columns)
-print("Required columns for signals:", required_cols_for_signals)
-# ...
-first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
+    # Dynamically build required_cols_for_signals based on selection and intraday status
+    required_cols_for_signals = []
+    for key, selected in selection.items():
+        if selected:
+            if key == "EMA Trend": required_cols_for_signals.extend(["EMA21", "EMA50", "EMA200"])
+            elif key == "Ichimoku Cloud": required_cols_for_signals.extend(["ichimoku_a", "ichimoku_b"]) # ichimoku_conversion_line, ichimoku_base_line are also needed for ichimoku_a/b calculation but not directly for signal
+            elif key == "Parabolic SAR": required_cols_for_signals.append("psar")
+            elif key == "ADX": required_cols_for_signals.append("adx")
+            elif key == "RSI Momentum": required_cols_for_signals.append("RSI")
+            elif key == "Stochastic": required_cols_for_signals.extend(["stoch_k", "stoch_d"])
+            elif key == "CCI": required_cols_for_signals.append("cci")
+            elif key == "ROC": required_cols_for_signals.append("roc")
+            elif key == "Volume Spike": required_cols_for_signals.extend(["Volume", "Vol_Avg_50"])
+            elif key == "OBV": required_cols_for_signals.append("obv")
+            elif key == "VWAP": # VWAP is conditional on is_intraday, but backtest is always daily for now
+                pass # Do not add VWAP if backtest is not intraday, it will be NA anyway
+
+    # Ensure ATR is always included as it's critical for stop/profit
+    if "ATR" not in required_cols_for_signals:
+        required_cols_for_signals.append("ATR")
     
-first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
-if first_valid_idx is None:
-        st.warning("No valid data points found after indicator calculation for backtesting.", icon="⚠️")
-return [], 0, 0
+    # Add 'Close', 'Low', 'High', 'Open' as they are fundamental for trade logic
+    for col in ['Close', 'Low', 'High', 'Open']:
+        if col not in required_cols_for_signals:
+            required_cols_for_signals.append(col)
 
-start_i = df_historical_calculated.index.get_loc(first_valid_idx)
-if start_i == 0: start_i = 1
+    # Filter out duplicates and ensure all columns exist in the DataFrame
+    required_cols_for_signals = list(set(required_cols_for_signals))
+    
+    # Check if all required columns actually exist in the DataFrame
+    missing_cols = [col for col in required_cols_for_signals if col not in df_historical_calculated.columns]
+    if missing_cols:
+        st.warning(f"Backtest cannot proceed: Missing required columns in historical data: {missing_cols}. This might be due to indicator calculation failures or a non-intraday backtest trying to use intraday-only indicators like VWAP.", icon="⚠️")
+        return [], 0, 0
 
-for i in range(start_i, len(df_historical_calculated)):
+    first_valid_idx = df_historical_calculated[required_cols_for_signals].first_valid_index()
+    if first_valid_idx is None:
+        st.warning("No valid data points found after indicator calculation for backtesting (all required columns are NaN at the start).", icon="⚠️")
+        return [], 0, 0
+
+    start_i = df_historical_calculated.index.get_loc(first_valid_idx)
+    if start_i == 0: start_i = 1
+
+    for i in range(start_i, len(df_historical_calculated)):
         current_day_data = df_historical_calculated.iloc[i]
         prev_day_data = df_historical_calculated.iloc[i-1]
 
@@ -262,11 +291,15 @@ for i in range(start_i, len(df_historical_calculated)):
                 in_trade = False
 
         if not in_trade:
+            # Pass is_intraday=False for backtest as it's currently always daily
             signals = generate_signals_for_row(prev_day_data, selection, df_historical_calculated.iloc[:i], is_intraday=False)
 
             selected_and_fired_count = 0
             selected_indicator_count = 0
-            signal_indicator_keys = [k for k in selection.keys() if k not in ["Bollinger Bands", "Pivot Points", "VWAP"]]
+            # Filter for actual signal indicators, not display-only or VWAP if not intraday
+            signal_indicator_keys = [k for k in selection.keys() if k not in ["Bollinger Bands", "Pivot Points"]]
+            if not is_intraday: # Backtest is always daily, so exclude VWAP from signal keys here
+                signal_indicator_keys = [k for k in signal_indicator_keys if k != "VWAP"]
 
             for indicator_key in signal_indicator_keys:
                 if selection.get(indicator_key):
@@ -282,7 +315,7 @@ for i in range(start_i, len(df_historical_calculated)):
                     elif indicator_key == "ROC": actual_signal_name = "Positive ROC (>0)"
                     elif indicator_key == "Volume Spike": actual_signal_name = "Volume Spike (>1.5x Avg)"
                     elif indicator_key == "OBV": actual_signal_name = "OBV Rising"
-                    elif indicator_key == "VWAP": actual_signal_name = "Price > VWAP" # VWAP is handled by is_intraday in generate_signals_for_row
+                    elif indicator_key == "VWAP": actual_signal_name = "Price > VWAP" # This will only be true if is_intraday was true in generate_signals_for_row
 
                     if actual_signal_name and signals.get(actual_signal_name, False):
                         selected_and_fired_count += 1
@@ -295,14 +328,14 @@ for i in range(start_i, len(df_historical_calculated)):
                     trades.append({"Date": current_day_data.name.strftime('%Y-%m-%d'), "Type": "Entry", "Price": round(entry_price, 2)})
                     in_trade = True
 
-if in_trade:
+    if in_trade:
         final_exit_price = df_historical_calculated.iloc[-1]['Close']
         pnl = final_exit_price - entry_price
         trades.append({"Date": df_historical_calculated.index[-1].strftime('%Y-%m-%d'), "Type": "Exit (End of Backtest)", "Price": round(final_exit_price, 2), "Entry Price": round(entry_price, 2), "PnL": round(pnl, 2)})
 
-wins = len([t for t in trades if t['Type'] == 'Exit (Win)'])
-losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
-return trades, wins, losses
+    wins = len([t for t in trades if t['Type'] == 'Exit (Win)'])
+    losses = len([t for t in trades if t['Type'] == 'Exit (Loss)'])
+    return trades, wins, losses
 
 # === Options Strategy Logic ===
 EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell": 15, "Strong Sell": 0}
@@ -446,4 +479,4 @@ def get_options_suggestion(confidence, stock_price, calls_df):
             return "info", f"Moderate Confidence ({confidence:.0f}%): An At-The-Money (ATM) call balances cost and potential upside.", "This is a good general strategy for moderate bullishness.", atm_call.iloc[0]
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
-        return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
+        return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None"
