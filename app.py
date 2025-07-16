@@ -3,8 +3,9 @@ import sys
 import os
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt  # Needed for plt.close() in display_components
-import yfinance as yf
+import matplotlib.pyplot as plt # Needed for plt.close() in display_components
+import yfinance as yf # Keep this import here for direct yf usage if any, though it's also in utils
+
 print("Current working directory:", os.getcwd())
 print("Directory contents:", os.listdir())
 print("=== DEBUG INFO ===")
@@ -34,10 +35,10 @@ except ImportError as e:
 
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
-st.title("# Aatif's AI-Powered Trading Hub")
+st.title("🚀 Aatif's AI-Powered Trading Hub") # Removed '#' from title as it's a markdown element, not part of string
 
 # === Constants and Configuration ===
-LOG_FILE = "trade_log.csv"  # Define here or pass from a config module
+LOG_FILE = "trade_log.csv" # Define here or pass from a config module
 
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
@@ -79,7 +80,7 @@ expert_score = 50
 finviz_data = {"headlines": ["Automation is disabled."]}
 
 if use_automation:
-    finviz_data = get_finviz_data(ticker)
+    finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
     auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
     auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
     auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
@@ -108,7 +109,9 @@ if ticker:
             st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
         else:
             # Calculate indicators once for the main display
-            df_calculated = calculate_indicators(hist_data.copy(), selected_params_main['interval'] in ['5m', '60m'])
+            # Pass is_intraday status to calculate_indicators
+            is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
+            df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
             
             if df_calculated.empty:
                 st.warning("No data available after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
@@ -116,7 +119,7 @@ if ticker:
 
             # Calculate scores for display
             last_row_for_signals = df_calculated.iloc[-1]
-            signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, selected_params_main['interval'] in ['5m', '60m'])
+            signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, is_intraday_data)
             
             technical_score = (sum(1 for f in signals_for_score.values() if f) / len(signals_for_score)) * 100 if signals_for_score else 0
             
@@ -140,7 +143,8 @@ if ticker:
                 display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
             
             with backtest_tab:
-                display_backtest_tab(ticker, indicator_selection) # Pass selection for backtest strategy
+                # Pass is_intraday=False to display_backtest_tab because backtest is always daily data
+                display_backtest_tab(ticker, indicator_selection)
             
             with news_tab:
                 display_news_info_tab(ticker, info_data, finviz_data)
