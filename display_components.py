@@ -1,4 +1,4 @@
-# display_components.py - Version 1.5
+# display_components.py - Version 1.6
 
 import streamlit as st
 import pandas as pd
@@ -24,7 +24,7 @@ def format_indicator_display(signal_key, current_value, description, ideal_value
 
     value_str = ""
     if current_value is not None and not pd.isna(current_value):
-        if isinstance(current_value, (int, float)):
+        if isinstance(current_value, (int, float)) and not isinstance(current_value, bool): # Exclude boolean from float formatting
             value_str = f"Current: `{current_value:.2f}`"
         else:
             value_str = "Current: N/A"
@@ -50,7 +50,9 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.subheader("💡 Confidence Score")
         st.metric("Overall Confidence", f"{overall_confidence:.0f}/100")
         st.progress(overall_confidence / 100)
-        st.markdown(f"- **Technical:** `{scores['technical']:.0f}` (W: `{final_weights['technical']*100:.0f}%`)\n- **Sentiment:** `{scores['sentiment']:.0f}` (W: `{final_weights['sentiment']*100:.0f}%`)\n- **Expert:** `{scores['expert']:.0f}` (W: `{final_weights['expert']*100:.0f}%`)")
+        st.markdown(f"- **Technical Score:** `{scores['technical']:.0f}` (Weight: `{final_weights['technical']*100:.0f}%`)\n"
+                    f"- **Sentiment Score:** `{sentiment_score:.0f}` (Weight: `{final_weights['sentiment']*100:.0f}%`)\n"
+                    f"- **Expert Rating:** `{expert_score:.0f}` (Weight: `{final_weights['expert']*100:.0f}%`)")
         
         st.subheader("🎯 Key Price Levels")
         current_price = last['Close']
@@ -243,7 +245,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     {"Metric": "Delta", "Value": f"{rec_option_buy.get('delta', None):.2f}" if rec_option_buy.get('delta') is not None and not pd.isna(rec_option_buy.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
                     {"Metric": "Theta", "Value": f"{rec_option_buy.get('theta', None):.3f}" if rec_option_buy.get('theta') is not None and not pd.isna(rec_option_buy.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Buyers": "As low as possible"},
                     {"Metric": "Gamma", "Value": f"{rec_option_buy.get('gamma', None):.3f}" if rec_option_buy.get('gamma') is not None and not pd.isna(rec_option_buy.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Buyers": "Higher for directional plays"},
-                    {"Metric": "Vega", "Value": f"{rec_option_buy.get('vega', None):.3f}" if rec_option_buy.get('vega') is not None and not pd.isna(rec_option_buy.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Buyers": "Lower if IV expected to fall"},
+                    {"Metric": "Vega", "Value": f"{rec_option_buy.get('vega', None):.3f}" if rec_option_buy.get('vega') is not None and not pd.isna(rec_option_buy.get('vega')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Lower if IV expected to fall"},
                     {"Metric": "Rho", "Value": f"{rec_option_buy.get('rho', None):.3f}" if rec_option_buy.get('rho') is not None and not pd.isna(rec_option_buy.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Less significant for short-term"},
                     {"Metric": "Open Interest", "Value": f"{rec_option_buy.get('openInterest', None):,}" if rec_option_buy.get('openInterest') is not None and not pd.isna(rec_option_buy.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
                     {"Metric": "Volume (Today)", "Value": f"{rec_option_buy.get('volume', None):,}" if rec_option_buy.get('volume') is not None and not pd.isna(rec_option_buy.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
@@ -262,7 +264,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     {"Metric": "Delta", "Value": f"{rec_option_sell.get('delta', None):.2f}" if rec_option_sell.get('delta') is not None and not pd.isna(rec_option_sell.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Sellers": "Lower (0.20-0.40) for defined risk spreads"},
                     {"Metric": "Theta", "Value": f"{rec_option_sell.get('theta', None):.3f}" if rec_option_sell.get('theta') is not None and not pd.isna(rec_option_sell.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Sellers": "Higher (more decay)"},
                     {"Metric": "Gamma", "Value": f"{rec_option_sell.get('gamma', None):.3f}" if rec_option_sell.get('gamma') is not None and not pd.isna(rec_option_sell.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Sellers": "Lower for stability"},
-                    {"Metric": "Vega", "Value": f"{rec_option_sell.get('vega', None):.3f}" if rec_option_sell.get('vega') is not None and not pd.isna(rec_option_sell.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Sellers": "Higher if IV expected to fall"},
+                    {"Metric": "Vega", "Value": f"{rec_option_sell.get('vega', None):.3f}" if rec_option_sell.get('vega') is not None and not pd.isna(rec_option_sell.get('vega')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Sellers": "Less significant for short-term"},
                     {"Metric": "Rho", "Value": f"{rec_option_sell.get('rho', None):.3f}" if rec_option_sell.get('rho') is not None and not pd.isna(rec_option_sell.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Sellers": "Less significant for short-term"},
                     {"Metric": "Open Interest", "Value": f"{rec_option_sell.get('openInterest', None):,}" if rec_option_sell.get('openInterest') is not None and not pd.isna(rec_option_sell.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Sellers": "> 100s"},
                     {"Metric": "Volume (Today)", "Value": f"{rec_option_sell.get('volume', None):,}" if rec_option_sell.get('volume') is not None and not pd.isna(rec_option_sell.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Sellers": "Higher (>100)"},
@@ -281,7 +283,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     {"Metric": "Delta", "Value": f"{rec_option.get('delta', None):.2f}" if rec_option.get('delta') is not None and not pd.isna(rec_option.get('delta')) else "N/A", "Description": "Option's price change per $1 stock change.", "Ideal for Buyers": "0.60 to 0.80 (for ITM calls)"},
                     {"Metric": "Theta", "Value": f"{rec_option.get('theta', None):.3f}" if rec_option.get('theta') is not None and not pd.isna(rec_option.get('theta')) else "N/A", "Description": "Time decay. Daily value lost from the premium.", "Ideal for Buyers": "As low as possible"},
                     {"Metric": "Gamma", "Value": f"{rec_option.get('gamma', None):.3f}" if rec_option.get('gamma') is not None and not pd.isna(rec_option.get('gamma')) else "N/A", "Description": "Rate of change of Delta. High Gamma = faster delta changes.", "Ideal for Buyers": "Higher for directional plays"},
-                    {"Metric": "Vega", "Value": f"{rec_option.get('vega', None):.3f}" if rec_option.get('vega') is not None and not pd.isna(rec_option.get('vega')) else "N/A", "Description": "Option's price change per 1% change in IV.", "Ideal for Buyers": "Lower if IV expected to fall"},
+                    {"Metric": "Vega", "Value": f"{rec_option.get('vega', None):.3f}" if rec_option.get('vega') is not None and not pd.isna(rec_option.get('vega')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Less significant for short-term"},
                     {"Metric": "Rho", "Value": f"{rec_option.get('rho', None):.3f}" if rec_option.get('rho') is not None and not pd.isna(rec_option.get('rho')) else "N/A", "Description": "Option's price change per 1% change in interest rates.", "Ideal for Buyers": "Less significant for short-term"},
                     {"Metric": "Open Interest", "Value": f"{rec_option.get('openInterest', None):,}" if rec_option.get('openInterest') is not None and not pd.isna(rec_option.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
                     {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
@@ -326,9 +328,9 @@ def display_backtest_tab(ticker, selection):
         col3.metric("Win Rate", f"{win_rate:.1f}%")
         
         if trades: st.dataframe(pd.DataFrame(trades).tail(20))
-        else: st.info("No trades were executed based on the current strategy and historical data. Try adjusting indicators or timeframes.")
+        else: st.info("No trades were executed based on the current strategy and historical data. Try adjusting indicators or timeframes, or check if enough historical data is available.")
     else:
-        st.warning("Could not fetch daily data for backtesting or data is empty.")
+        st.warning("Could not fetch daily data for backtesting or data is empty. Ensure the ticker is valid and enough historical data is available for the selected period (e.g., 2 years).")
 
 def display_news_info_tab(ticker, info, finviz_data):
     """Displays news and company information."""
@@ -348,8 +350,11 @@ def display_news_info_tab(ticker, info, finviz_data):
         else: 
             st.info("No upcoming calendar events found.")
     st.markdown("#### 🗞️ Latest Headlines")
-    for h in finviz_data['headlines']:
-        st.markdown(f"_{h}_")
+    if finviz_data and finviz_data.get('headlines'):
+        for h in finviz_data['headlines']:
+            st.markdown(f"_{h}_")
+    else:
+        st.info("No recent headlines found or automated scoring is disabled.")
 
 def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     """Displays and manages the trade log."""
@@ -359,39 +364,3 @@ def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     
     st.info("Trade log functionality is pending implementation.")
 
-def display_ticker_comparison_chart(comparison_data):
-    """
-    Displays a bar chart comparing tickers by current price and confidence score.
-    """
-    if not comparison_data:
-        st.info("No data available for comparison chart.")
-        return
-
-    df_comparison = pd.DataFrame(comparison_data)
-    df_comparison = df_comparison.set_index("Ticker")
-
-    # Create two columns for two charts
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Current Price Comparison")
-        fig_price, ax_price = plt.subplots(figsize=(8, 5))
-        df_comparison["Current Price"].plot(kind='bar', ax=ax_price, color='skyblue')
-        ax_price.set_title("Current Price by Ticker")
-        ax_price.set_ylabel("Price ($)")
-        ax_price.tick_params(axis='x', rotation=45)
-        st.pyplot(fig_price, clear_figure=True)
-        plt.close(fig_price)
-
-    with col2:
-        st.subheader("Confidence Score Comparison")
-        fig_confidence, ax_confidence = plt.subplots(figsize=(8, 5))
-        df_comparison["Confidence Score"].plot(kind='bar', ax=ax_confidence, color='lightgreen')
-        ax_confidence.set_title("Confidence Score by Ticker")
-        ax_confidence.set_ylabel("Score (0-100)")
-        ax_confidence.set_ylim(0, 100)
-        ax_confidence.tick_params(axis='x', rotation=45)
-        st.pyplot(fig_confidence, clear_figure=True)
-        plt.close(fig_confidence)
-
-    st.dataframe(df_comparison) # Display the raw data table as well
