@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import mplfinance as mpf  # Fixed typo
 import matplotlib.pyplot as plt
+import yfinance as yf
 import os
 # Import functions from utils.py
 from utils import (
