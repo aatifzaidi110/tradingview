@@ -8,15 +8,12 @@ import requests
 from bs4 import BeautifulSoup
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from datetime import datetime, timedelta
-import nltk # Added for VADER lexicon download
+import nltk
 
 # --- NLTK VADER Lexicon Download ---
-# This block attempts to find the lexicon; if not found, it downloads it.
 try:
     nltk.data.find('sentiment/vader_lexicon.zip')
-# Change the specific exception to a more general one like LookupError or Exception
-except LookupError: # LookupError is often raised when a resource is not found
-# Or you can use a more general 'except Exception:' if LookupError doesn't catch it
+except LookupError:
     nltk.download('vader_lexicon')
 
 # === Data Fetching Functions ===
@@ -74,22 +71,26 @@ def calculate_indicators(df, is_intraday=False):
     try: df_cleaned.loc[:, "EMA21"]=ta.trend.ema_indicator(df_cleaned["Close"],21); df_cleaned.loc[:, "EMA50"]=ta.trend.ema_indicator(df_cleaned["Close"],50); df_cleaned.loc[:, "EMA200"]=ta.trend.ema_indicator(df_cleaned["Close"],200)
     except Exception as e: st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
 
-    # --- Corrected Ichimoku Cloud Calculation ---
+    # --- Corrected Ichimoku Cloud Calculation (using direct functions) ---
     try:
-        # Initialize IchimokuIndicator for conversion_line and base_line
-        # Removed 'window4' as it's not a standard parameter for ta v0.11.0
-        ichimoku = ta.trend.IchimokuIndicator(
+        # Calculate Ichimoku components using direct functions from ta.trend
+        # This avoids issues with the IchimokuIndicator class's constructor arguments.
+        df_cleaned.loc[:, 'ichimoku_conversion_line'] = ta.trend.ichimoku_conversion_line(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
             close=df_cleaned['Close'],
             window1=9,
             window2=26,
-            window3=52,
             fillna=True
         )
-
-        # Calculate Ichimoku A (Senkou Span A) and B (Senkou Span B) using direct functions
-        # from ta.trend, as they are not attributes of the IchimokuIndicator object directly.
+        df_cleaned.loc[:, 'ichimoku_base_line'] = ta.trend.ichimoku_base_line(
+            high=df_cleaned['High'],
+            low=df_cleaned['Low'],
+            close=df_cleaned['Close'],
+            window1=9,
+            window2=26,
+            fillna=True
+        )
         df_cleaned.loc[:, 'ichimoku_a'] = ta.trend.ichimoku_a(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
@@ -100,15 +101,10 @@ def calculate_indicators(df, is_intraday=False):
         df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            window2=26,
-            window3=52,
+            window2=26, # This is the window_b parameter for ichimoku_b
+            window3=52, # This is the window_c parameter for ichimoku_b
             fillna=True
         )
-
-        # Assign conversion and base lines
-        df_cleaned.loc[:, 'ichimoku_conversion_line'] = ichimoku.ichimoku_conversion_line()
-        df_cleaned.loc[:, 'ichimoku_base_line'] = ichimoku.ichimoku_base_line()
-
     except Exception as e:
         st.warning(f"Could not calculate Ichimoku Cloud: {e}", icon="⚠️")
         # Ensure columns are added even if calculation fails to prevent KeyError later
@@ -126,16 +122,22 @@ def calculate_indicators(df, is_intraday=False):
     except Exception as e: st.warning(f"Could not calculate RSI: {e}", icon="⚠️")
     try: stoch = ta.momentum.StochasticOscillator(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close']); df_cleaned.loc[:, 'stoch_k'] = stoch.stoch(); df_cleaned.loc[:, 'stoch_d'] = stoch.stoch_signal()
     except Exception as e: st.warning(f"Could not calculate Stochastic Oscillator: {e}", icon="⚠️")
+    
+    # --- Corrected CCI Calculation ---
     try:
         if not (df_cleaned['High'] == df_cleaned['Low']).all() and not (df_cleaned['High'] == df_cleaned['Close']).all():
+            # Ensure 'cci' is called correctly from ta.momentum
             df_cleaned.loc[:, 'cci'] = ta.momentum.cci(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close'])
         else:
             st.warning("CCI cannot be calculated due to invariant High/Low/Close prices.", icon="⚠️")
     except Exception as e: st.warning(f"Could not calculate CCI: {e}", icon="⚠️")
+    # --- End Corrected CCI Calculation ---
+
     try: df_cleaned.loc[:, 'roc'] = ta.momentum.ROCIndicator(df_cleaned['Close']).roc()
     except Exception as e: st.warning(f"Could not calculate ROC: {e}", icon="⚠️")
     try: df_cleaned.loc[:, 'obv'] = ta.volume.OnBalanceVolumeIndicator(df_cleaned['Close'], df_cleaned['Volume']).on_balance_volume()
     except Exception as e: st.warning(f"Could not calculate OBV: {e}", icon="⚠️")
+    
     if is_intraday:
         try: df_cleaned.loc[:, 'vwap'] = ta.volume.VolumeWeightedAveragePrice(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close'], df_cleaned['Volume']).volume_weighted_average_price()
         except Exception as e: st.warning(f"Could not calculate VWAP: {e}", icon="⚠️")
@@ -177,7 +179,6 @@ def generate_signals_for_row(row_data, selection, full_df=None, is_intraday=Fals
             if current_index_loc >= 10:
                 prev_data_for_rolling = full_df.iloc[current_index_loc - 10 : current_index_loc]
                 if not prev_data_for_rolling.empty and 'obv' in prev_data_for_rolling.columns:
-                    # Ensure the rolling mean is not NaN and has enough data
                     obv_rolling_mean = prev_data_for_rolling['obv'].rolling(10).mean().iloc[-1]
                     if not pd.isna(obv_rolling_mean):
                         signals["OBV Rising"] = row_data['obv'] > obv_rolling_mean
@@ -237,7 +238,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
     for key, selected in selection.items():
         if selected:
             if key == "EMA Trend": required_cols_for_signals.extend(["EMA21", "EMA50", "EMA200"])
-            elif key == "Ichimoku Cloud": required_cols_for_signals.extend(["ichimoku_a", "ichimoku_b"]) # ichimoku_conversion_line, ichimoku_base_line are also needed for ichimoku_a/b calculation but not directly for signal
+            elif key == "Ichimoku Cloud": required_cols_for_signals.extend(["ichimoku_a", "ichimoku_b", "ichimoku_conversion_line", "ichimoku_base_line"])
             elif key == "Parabolic SAR": required_cols_for_signals.append("psar")
             elif key == "ADX": required_cols_for_signals.append("adx")
             elif key == "RSI Momentum": required_cols_for_signals.append("RSI")
@@ -246,8 +247,13 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
             elif key == "ROC": required_cols_for_signals.append("roc")
             elif key == "Volume Spike": required_cols_for_signals.extend(["Volume", "Vol_Avg_50"])
             elif key == "OBV": required_cols_for_signals.append("obv")
-            elif key == "VWAP": # VWAP is conditional on is_intraday, but backtest is always daily for now
-                pass # Do not add VWAP if backtest is not intraday, it will be NA anyway
+            # VWAP is handled by is_intraday in calculate_indicators, and backtest is always daily
+            # So, we only include it if it's explicitly selected AND the data is intraday.
+            # For daily backtest, VWAP column will be pd.NA, so we don't need it as a *required* column for signals
+            # unless we specifically want to filter out rows where it's NA.
+            # Given backtest is daily, VWAP will be NA, so we should not include it here.
+            # The signal_indicator_keys filtering below already handles this.
+            # No need to add "VWAP" to required_cols_for_signals for daily backtest.
 
     # Ensure ATR is always included as it's critical for stop/profit
     if "ATR" not in required_cols_for_signals:
