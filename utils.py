@@ -1,4 +1,4 @@
-# utils.py - Version 2.1
+# utils.py - Version 2.2
 
 import streamlit as st
 import yfinance as yf
@@ -36,7 +36,9 @@ def get_finviz_data(ticker):
             return {"recom": analyst_recom, "headlines": headlines, "sentiment_compound": avg_compound}
     except Exception as e:
         st.error(f"Error fetching Finviz data: {e}", icon="🚫")
-        return {"recom": "N/A", "headlines": [], "sentiment_compound": 0}
+        return {"recom": "N/A", "headlines": [], "sentiment_compound": 0, "error": str(e)} # Added 'error' key
+
+# Added 'error' key to the return value of get_finviz_data to provide more context when fetching fails.
 
 @st.cache_data(ttl=60)
 def get_data(symbol, period, interval):
@@ -59,7 +61,7 @@ def calculate_indicators(df, is_intraday=False):
     """Calculates various technical indicators for a given DataFrame."""
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     if not all(col in df.columns for col in required_cols):
-        st.error(f"Missing one or more required columns for indicator calculation: {required_cols}", icon="🚫")
+        st.error(f"Missing one or more required columns for indicator calculation: {required_cols}", icon="�")
         return df
 
     df_cleaned = df.dropna(subset=['High', 'Low', 'Close', 'Volume']).copy()
@@ -380,7 +382,7 @@ def get_moneyness(strike, current_stock_price, option_type):
             return "OTM"
     return "N/A"
 
-def analyze_options_chain(calls_df, puts_df, current_stock_price):
+def analyze_options_chain(calls_df, puts_df, current_stock_price, expiry_date): # Added expiry_date parameter
     """
     Analyzes the options chain to provide highlights and suggestions.
     """
@@ -399,7 +401,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
             analysis_results["Deep ITM Calls (Bullish)"].append({
                 "Type": "Call",
                 "Strike": row['strike'],
-                "Expiration": row['expiration'],
+                "Expiration": expiry_date, # Use the passed expiry_date
                 "Reason": "High delta, behaves like stock, good for strong bullish conviction."
             })
 
@@ -410,7 +412,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
             analysis_results["Deep OTM Puts (Bullish)"].append({
                 "Type": "Put",
                 "Strike": row['strike'],
-                "Expiration": row['expiration'],
+                "Expiration": expiry_date, # Use the passed expiry_date
                 "Reason": "Consider selling for premium if expecting price to stay above this level (defined risk)."
             })
     
@@ -421,7 +423,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
             analysis_results["High Volume/Open Interest Calls"].append({
                 "Type": "Call",
                 "Strike": row['strike'],
-                "Expiration": row['expiration'],
+                "Expiration": expiry_date, # Use the passed expiry_date
                 "Reason": "High liquidity, easier to enter/exit trades."
             })
     if not puts_df.empty:
@@ -430,7 +432,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
             analysis_results["High Volume/Open Interest Puts"].append({
                 "Type": "Put",
                 "Strike": row['strike'],
-                "Expiration": row['expiration'],
+                "Expiration": expiry_date, # Use the passed expiry_date
                 "Reason": "High liquidity, easier to enter/exit trades."
             })
 
@@ -442,7 +444,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
                 analysis_results["Near-Term ATM Options"].append({
                     "Type": "Call",
                     "Strike": row['strike'],
-                    "Expiration": row['expiration'],
+                    "Expiration": expiry_date, # Use the passed expiry_date
                     "Reason": "Balanced risk/reward, good for moderate directional moves."
                 })
     if not puts_df.empty:
@@ -452,7 +454,7 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
                 analysis_results["Near-Term ATM Options"].append({
                     "Type": "Put",
                     "Strike": row['strike'],
-                    "Expiration": row['expiration'],
+                    "Expiration": expiry_date, # Use the passed expiry_date
                     "Reason": "Balanced risk/reward, good for moderate directional moves."
                 })
 
@@ -619,3 +621,4 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
+�
