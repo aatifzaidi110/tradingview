@@ -1,4 +1,4 @@
-# display_components.py - Version 1.29
+# display_components.py - Version 1.30
 
 import streamlit as st
 import pandas as pd
@@ -351,7 +351,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                         {"Metric": "Open Interest", "Value": f"{rec_option.get('openInterest', None):,}" if rec_option.get('openInterest') is not None and not pd.isna(rec_option.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
                         {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                     ]
-                    st.table(pd.DataFrame(option_metrics).set_index("Metric"))
+                st.table(pd.DataFrame(option_metrics).set_index("Metric"))
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
         
