@@ -1,4 +1,4 @@
-# utils.py - Version 2.0
+# utils.py - Version 2.1
 
 import streamlit as st
 import yfinance as yf
@@ -101,7 +101,7 @@ def calculate_indicators(df, is_intraday=False):
         df_cleaned.loc[:, 'ichimoku_b'] = ta.trend.ichimoku_b(
             high=df_cleaned['High'],
             low=df_cleaned['Low'],
-            window2=26, # window2 for kijun
+            window2=26, # window2 for senkou span B
             window3=52, # window3 for senkou span B
             fillna=True
         )
@@ -361,6 +361,103 @@ def convert_finviz_recom_to_score(recom_str):
         else: return 0 # Strong Sell
     except ValueError:
         return 50 # Default to Hold if not a valid number
+
+def get_moneyness(strike, current_stock_price, option_type):
+    """Determines if an option is In-The-Money (ITM), At-The-Money (ATM), or Out-of-The-Money (OTM)."""
+    if option_type == "call":
+        if strike < current_stock_price:
+            return "ITM"
+        elif strike == current_stock_price:
+            return "ATM"
+        else:
+            return "OTM"
+    elif option_type == "put":
+        if strike > current_stock_price:
+            return "ITM"
+        elif strike == current_stock_price:
+            return "ATM"
+        else:
+            return "OTM"
+    return "N/A"
+
+def analyze_options_chain(calls_df, puts_df, current_stock_price):
+    """
+    Analyzes the options chain to provide highlights and suggestions.
+    """
+    analysis_results = {
+        "Deep ITM Calls (Bullish)": [],
+        "Deep OTM Puts (Bullish)": [],
+        "High Volume/Open Interest Calls": [],
+        "High Volume/Open Interest Puts": [],
+        "Near-Term ATM Options": []
+    }
+
+    # Deep ITM Calls (Bullish)
+    if not calls_df.empty:
+        itm_calls = calls_df[calls_df['inTheMoney']].sort_values(by='strike', ascending=False)
+        for _, row in itm_calls.head(3).iterrows(): # Top 3 ITM calls
+            analysis_results["Deep ITM Calls (Bullish)"].append({
+                "Type": "Call",
+                "Strike": row['strike'],
+                "Expiration": row['expiration'],
+                "Reason": "High delta, behaves like stock, good for strong bullish conviction."
+            })
+
+    # Deep OTM Puts (Bullish - for selling premium)
+    if not puts_df.empty:
+        otm_puts = puts_df[~puts_df['inTheMoney']].sort_values(by='strike', ascending=False)
+        for _, row in otm_puts.head(3).iterrows(): # Top 3 OTM puts
+            analysis_results["Deep OTM Puts (Bullish)"].append({
+                "Type": "Put",
+                "Strike": row['strike'],
+                "Expiration": row['expiration'],
+                "Reason": "Consider selling for premium if expecting price to stay above this level (defined risk)."
+            })
+    
+    # High Volume/Open Interest Options
+    if not calls_df.empty:
+        high_vol_oi_calls = calls_df[(calls_df['volume'] > 100) | (calls_df['openInterest'] > 500)].sort_values(by=['volume', 'openInterest'], ascending=False)
+        for _, row in high_vol_oi_calls.head(3).iterrows():
+            analysis_results["High Volume/Open Interest Calls"].append({
+                "Type": "Call",
+                "Strike": row['strike'],
+                "Expiration": row['expiration'],
+                "Reason": "High liquidity, easier to enter/exit trades."
+            })
+    if not puts_df.empty:
+        high_vol_oi_puts = puts_df[(puts_df['volume'] > 100) | (puts_df['openInterest'] > 500)].sort_values(by=['volume', 'openInterest'], ascending=False)
+        for _, row in high_vol_oi_puts.head(3).iterrows():
+            analysis_results["High Volume/Open Interest Puts"].append({
+                "Type": "Put",
+                "Strike": row['strike'],
+                "Expiration": row['expiration'],
+                "Reason": "High liquidity, easier to enter/exit trades."
+            })
+
+    # Near-Term ATM Options
+    if not calls_df.empty:
+        atm_calls = calls_df.iloc[[(calls_df['strike'] - current_stock_price).abs().idxmin()]]
+        if not atm_calls.empty:
+            for _, row in atm_calls.iterrows():
+                analysis_results["Near-Term ATM Options"].append({
+                    "Type": "Call",
+                    "Strike": row['strike'],
+                    "Expiration": row['expiration'],
+                    "Reason": "Balanced risk/reward, good for moderate directional moves."
+                })
+    if not puts_df.empty:
+        atm_puts = puts_df.iloc[[(puts_df['strike'] - current_stock_price).abs().idxmin()]]
+        if not atm_puts.empty:
+            for _, row in atm_puts.iterrows():
+                analysis_results["Near-Term ATM Options"].append({
+                    "Type": "Put",
+                    "Strike": row['strike'],
+                    "Expiration": row['expiration'],
+                    "Reason": "Balanced risk/reward, good for moderate directional moves."
+                })
+
+    return analysis_results
+
 
 def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     """Generates an options trade plan based on confidence and available expirations."""
