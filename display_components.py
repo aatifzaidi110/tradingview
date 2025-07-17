@@ -1,4 +1,4 @@
-# display_components.py - Version 1.30
+# display_components.py - Version 1.34
 
 import streamlit as st
 import pandas as pd
@@ -364,7 +364,8 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
 
             # --- New Options Chain Analysis ---
             st.markdown("##### Options Chain Highlights & Suggestions")
-            chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price)
+            # Pass exp_date_str to analyze_options_chain
+            chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price, exp_date_str) 
             
             if chain_analysis_results:
                 has_content = False

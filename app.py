@@ -1,4 +1,4 @@
-# app.py - Version 1.12
+# app.py - Version 1.14
 # app.py
 import sys
 import os
@@ -37,6 +37,11 @@ except ImportError as e:
 # === Page Setup ===
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
+
+# === Refresh Button ===
+if st.button("🔄 Clear Cache & Refresh Data", help="Click to clear all cached data and re-run analysis."):
+    st.cache_data.clear() # Clear all cached data
+    st.rerun() # Rerun the app
 
 # === Constants and Configuration ===
 LOG_FILE = "trade_log.csv" # Define here or pass from a config module
