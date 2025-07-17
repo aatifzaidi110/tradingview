@@ -1,4 +1,4 @@
-# display_components.py - Version 1.19
+# display_components.py - Version 1.20
 
 import streamlit as st
 import pandas as pd
@@ -389,17 +389,26 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
             }
 
+            # Define the desired order of columns
+            desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
+
             # Prepare columns for display with tooltips
-            cols_to_display_with_tooltips = []
+            cols_to_display_with_tooltips = {}
             for col in desired_cols_to_display:
                 if col in chain_to_display_copy.columns:
-                    cols_to_display_with_tooltips.append(st.column_config.Column(
+                    cols_to_display_with_tooltips[col] = st.column_config.Column(
                         col,
                         help=column_descriptions.get(col, "No description available.")
-                    ))
+                    )
 
-            if cols_to_display_with_tooltips:
-                st.dataframe(chain_to_display_copy[available_cols].set_index('strike'), column_config=cols_to_display_with_tooltips)
+            # Filter chain_to_display_copy to only include available and desired columns
+            final_cols_to_show = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
+
+            if final_cols_to_show:
+                st.dataframe(
+                    chain_to_display_copy[final_cols_to_show].set_index('strike'),
+                    column_config=cols_to_display_with_tooltips
+                )
             else:
                 st.info("No relevant columns found in the options chain to display.")
 
@@ -440,9 +449,9 @@ def display_news_info_tab(ticker, info, finviz_data):
     with col2:
         st.markdown("#### 📅 Company Calendar")
         stock_obj_for_cal = yf.Ticker(ticker)
-        if stock_obj_for_cal and hasattr(stock_obj_for_cal, 'calendar') and isinstance(stock_obj_for_cal.calendar, pd.DataFrame) and not stock_obj_for_cal.calendar.empty: 
+        if stock_obj_for_cal and hasattr(stock_obj_for_cal, 'calendar') and isinstance(stock_obj_for_cal.calendar, pd.DataFrame) and not stock_obj_for_cal.empty:
             st.dataframe(stock_obj_for_cal.calendar.T)
-        else: 
+        else:
             st.info("No upcoming calendar events found.")
     st.markdown("#### 🗞️ Latest Headlines")
     if finviz_data and finviz_data.get('headlines'):
