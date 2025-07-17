@@ -1,4 +1,4 @@
-# display_components.py - Version 1.17
+# display_components.py - Version 1.18
 
 import streamlit as st
 import pandas as pd
@@ -10,10 +10,8 @@ import os # For chart saving/removing, though direct plot is preferred
 # Import functions from utils.py
 from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points, EXPERT_RATING_MAP, get_moneyness, analyze_options_chain # Import get_moneyness and analyze_options_chain
 
-# Removed INDICATOR_DESCRIPTIONS as it's now in glossary_components.py
-
 # === Helper for Indicator Display ===
-def format_indicator_display(signal_key, current_value, selected, signals_dict): # Removed description, ideal_value_desc
+def format_indicator_display(signal_key, current_value, selected, signals_dict):
     """
     Formats and displays a single technical indicator's concise information.
     """
@@ -26,7 +24,7 @@ def format_indicator_display(signal_key, current_value, selected, signals_dict):
 
     value_str = ""
     if current_value is not None and not pd.isna(current_value):
-        if isinstance(current_value, (int, float)) and not isinstance(current_value, bool): # Exclude boolean from float formatting
+        if isinstance(current_value, (int, float)) and not isinstance(current_value, bool):
             value_str = f"Current: `{current_value:.2f}`"
         else:
             value_str = "Current: N/A"
@@ -41,12 +39,12 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
     """Displays the main technical analysis and confidence score tab."""
     is_intraday = params['interval'] in ['5m', '60m']
     last = df.iloc[-1]
-    signals = generate_signals_for_row(last, selection, df, is_intraday) # Recalculate for display
+    signals = generate_signals_for_row(last, selection, df, is_intraday)
 
     col1, col2 = st.columns([1, 2])
     with col1:
         # --- Ticker Price and General Info (Moved to Top) ---
-        st.subheader(f"📊 {info.get('longName', ticker)}")
+        st.subheader(f"� {info.get('longName', ticker)}")
         st.write(f"**Ticker:** {ticker}")
 
         current_price = last['Close']
@@ -66,7 +64,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.metric(label="Current Price", value=f"${current_price:.2f}", delta=f"${price_delta:.2f}")
         st.markdown(f"**Overall Sentiment:** {sentiment_icon} {sentiment_status}")
 
-        st.markdown("---") # Separator
+        st.markdown("---")
 
         st.subheader("💡 Confidence Score")
         st.metric("Overall Confidence", f"{overall_confidence:.0f}/100")
@@ -86,6 +84,8 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         expert_text = "N/A (Excluded)"
         if expert_score is not None:
             # Find the key in EXPERT_RATING_MAP that matches the expert_score value
+            # This loop is correct, but ensure EXPERT_RATING_MAP is accessible.
+            # It's imported from utils.py, so it should be fine.
             for key, value in EXPERT_RATING_MAP.items():
                 if expert_score == value:
                     expert_text = key
@@ -102,7 +102,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         if show_finviz_link:
             st.markdown(f"**Source for Sentiment & Expert Scores:** [Finviz.com]({f'https://finviz.com/quote.ashx?t={ticker}'})")
 
-        st.markdown("---") # Separator
+        st.markdown("---")
 
         # --- 52-Week High/Low ---
         st.subheader("🗓️ 52-Week Range")
@@ -111,7 +111,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.write(f"**High:** ${week_52_high:.2f}" if isinstance(week_52_high, (int, float)) else f"**High:** {week_52_high}")
         st.write(f"**Low:** ${week_52_low:.2f}" if isinstance(week_52_low, (int, float)) else f"**Low:** {week_52_low}")
 
-        st.markdown("---") # Separator
+        st.markdown("---")
 
         # --- Support and Resistance Levels (from Pivot Points) ---
         st.subheader("🛡️ Support & Resistance Levels")
@@ -128,11 +128,9 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         else:
             st.info("Historical data not sufficient to calculate daily Pivot Points for support/resistance.")
         
-        st.markdown("---") # Separator
+        st.markdown("---")
 
         st.subheader("✅ Technical Analysis Readout")
-        # Removed the inline expanders for descriptions here.
-        # Users can now find detailed descriptions in the new Glossary tab.
         with st.expander("📈 Trend Indicators", expanded=True):
             if selection.get("EMA Trend"):
                 st.markdown(format_indicator_display("Uptrend (21>50>200 EMA)", None, selection.get("EMA Trend"), signals))
@@ -343,12 +341,11 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
         else:
             st.warning(trade_plan['message'])
-        # --- End of new detailed options display ---
         
         st.markdown("---")
         st.subheader("⛓️ Full Option Chain")
-        option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True, key=f"option_type_{ticker}") # Added unique key
-        exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}") # Added unique key
+        option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True, key=f"option_type_{ticker}")
+        exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}")
         if exp_date_str:
             calls, puts = get_options_chain(ticker, exp_date_str)
 
@@ -357,7 +354,6 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
             chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price)
             
             if chain_analysis_results:
-                # Display sections only if they have content
                 has_content = False
                 for category, options_list in chain_analysis_results.items():
                     if options_list:
@@ -370,12 +366,10 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
             else:
                 st.info("No detailed options chain analysis available for this expiration.")
             st.markdown("---")
-            # --- End New Options Chain Analysis ---
 
             st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
             
             chain_to_display = calls if option_type == "Calls" else puts
-            # Ensure 'inTheMoney' is available in the dataframe for display
             chain_to_display_copy = chain_to_display.copy()
             if 'strike' in chain_to_display_copy.columns:
                 chain_to_display_copy['Moneyness'] = chain_to_display_copy.apply(
@@ -395,11 +389,8 @@ def display_backtest_tab(ticker, selection):
     
     daily_hist, _ = get_data(ticker, "2y", "1d")
     if daily_hist is not None and not daily_hist.empty:
-        # Pass is_intraday=False to calculate_indicators for daily data
         daily_df_calculated = calculate_indicators(daily_hist.copy(), is_intraday=False)
-        # Removed .dropna() here, relying on backtest_strategy to handle NaNs via first_valid_idx
 
-        # Pass the selection directly to backtest_strategy
         trades, wins, losses = backtest_strategy(daily_df_calculated, selection)
         total_trades = wins + losses
         win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
@@ -441,7 +432,6 @@ def display_news_info_tab(ticker, info, finviz_data):
 def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     """Displays and manages the trade log."""
     st.subheader("📝 Log Your Trade Analysis")
-    # Added a unique key for the text_area based on the ticker
     user_notes = st.text_area("Add your personal notes or trade thesis here:", key=f"trade_notes_{ticker}")
     
     st.info("Trade log functionality is pending implementation.")
