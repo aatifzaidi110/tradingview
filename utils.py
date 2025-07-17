@@ -623,4 +623,3 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
-�
