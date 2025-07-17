@@ -1,4 +1,4 @@
-# utils.py - Version 1.5
+# utils.py - Version 1.6
 
 import streamlit as st
 import yfinance as yf
@@ -365,7 +365,6 @@ def get_moneyness(strike, current_price, option_type="call"):
             return "ATM"
     elif option_type == "put":
         if strike > current_price:
-            return "ITM"
             return "ITM"
         elif strike < current_price:
             return "OTM"
