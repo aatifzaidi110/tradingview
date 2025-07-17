@@ -1,4 +1,4 @@
-# utils.py - Version 1.7
+# utils.py - Version 1.8
 
 import streamlit as st
 import yfinance as yf
@@ -387,7 +387,15 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
         "Highest Vega Calls": [],
         "ITM Call Suggestions": [],
         "ATM Call Suggestions": [],
-        "OTM Call Suggestions": []
+        "OTM Call Suggestions": [],
+        # Added Put specific analysis categories
+        "Highest Delta Puts": [],
+        "Lowest Theta Puts": [],
+        "Highest Gamma Puts": [],
+        "Highest Vega Puts": [],
+        "ITM Put Suggestions": [],
+        "ATM Put Suggestions": [],
+        "OTM Put Suggestions": []
     }
 
     # Helper to format option summary
@@ -490,21 +498,21 @@ def analyze_options_chain(calls_df, puts_df, current_stock_price):
         )
 
         # Highest Volume (Puts)
-        if 'volume' in puts_df_copy.columns and not puts_df_copy['volume'].isnull().all():
+        if 'volume' in puts_df_copy.columns and not calls_df_copy['volume'].isnull().all(): # Corrected from calls_df_copy to puts_df_copy
             highest_vol_put = puts_df_copy.loc[puts_df_copy['volume'].idxmax()]
             analysis_results["Highest Volume Options"].append(format_option_summary(
                 highest_vol_put, "Put", f"Highest volume ({highest_vol_put['volume']:,}) indicates strong current interest."
             ))
 
         # Highest Open Interest (Puts)
-        if 'openInterest' in puts_df_copy.columns and not puts_df_copy['openInterest'].isnull().all():
+        if 'openInterest' in puts_df_copy.columns and not calls_df_copy['openInterest'].isnull().all(): # Corrected from calls_df_copy to puts_df_copy
             highest_oi_put = puts_df_copy.loc[puts_df_copy['openInterest'].idxmax()]
             analysis_results["Highest Open Interest Options"].append(format_option_summary(
                 highest_oi_put, "Put", f"Highest open interest ({highest_oi_put['openInterest']:,}) suggests significant market positioning."
             ))
 
         # Highest Implied Volatility (Puts)
-        if 'impliedVolatility' in puts_df_copy.columns and not puts_df_copy['impliedVolatility'].isnull().all():
+        if 'impliedVolatility' in puts_df_copy.columns and not calls_df_copy['impliedVolatility'].isnull().all(): # Corrected from calls_df_copy to puts_df_copy
             highest_iv_put = puts_df_copy.loc[puts_df_copy['impliedVolatility'].idxmax()]
             analysis_results["Highest Implied Volatility Options"].append(format_option_summary(
                 highest_iv_put, "Put", f"Highest IV ({highest_iv_put['impliedVolatility']:.2%}) indicates high expected price movement."
