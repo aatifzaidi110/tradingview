@@ -1,4 +1,4 @@
-# utils.py - Version 2.3
+# utils.py - Version 2.4
 
 import streamlit as st
 import yfinance as yf
@@ -35,7 +35,7 @@ def get_finviz_data(ticker):
             avg_compound = sum(compound_scores) / len(compound_scores) if compound_scores else 0
             return {"recom": analyst_recom, "headlines": headlines, "sentiment_compound": avg_compound}
     except Exception as e:
-        st.error(f"Error fetching Finviz data: {e}", icon="🚫")
+        st.error(f"Error fetching Finviz data: {e}", icon="�")
         return {"recom": "N/A", "headlines": [], "sentiment_compound": 0, "error": str(e)} # Added 'error' key
 
 # Added 'error' key to the return value of get_finviz_data to provide more context when fetching fails.
@@ -131,11 +131,9 @@ def calculate_indicators(df, is_intraday=False):
     
     # --- Corrected CCI Calculation ---
     try:
-        if not (df_cleaned['High'] == df_cleaned['Low']).all() and not (df_cleaned['High'] == df_cleaned['Close']).all():
-            # Ensure 'cci' is called correctly from ta.momentum
-            df_cleaned.loc[:, 'cci'] = ta.momentum.cci(df_cleaned['High'], df_cleaned['Low'], df_cleaned['Close'])
-        else:
-            st.warning("CCI cannot be calculated due to invariant High/Low/Close prices.", icon="⚠️")
+        # Explicitly use ta.momentum.CCIIndicator and then its cci() method
+        cci_indicator = ta.momentum.CCIIndicator(high=df_cleaned['High'], low=df_cleaned['Low'], close=df_cleaned['Close'])
+        df_cleaned.loc[:, 'cci'] = cci_indicator.cci()
     except Exception as e: st.warning(f"Could not calculate CCI: {e}", icon="⚠️")
     # --- End Corrected CCI Calculation ---
 
@@ -625,3 +623,4 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
+�
