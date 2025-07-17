@@ -1,4 +1,4 @@
-# display_components.py - Version 1.23
+# display_components.py - Version 1.24
 
 import streamlit as st
 import pandas as pd
@@ -182,9 +182,41 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
     with col2:
         st.subheader("📈 Price Chart")
         mav_tuple = (21, 50, 200) if selection.get("EMA Trend") else None
-        # Changed 'None' to '[]' for addplot when Bollinger Bands are not selected
-        ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])] if selection.get("Bollinger Bands") else []
         
+        ap = [] # Initialize addplot as an empty list
+        
+        # Add Bollinger Bands to addplot if selected and data is available
+        if selection.get("Bollinger Bands"):
+            # Check if BB columns exist and are not all NaN in the tail data
+            if 'BB_high' in df.columns and 'BB_low' in df.columns and not df[['BB_high', 'BB_low']].tail(120).isnull().all().all():
+                ap.append(mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']]))
+            else:
+                st.warning("Bollinger Bands data not available or all NaN for plotting.", icon="⚠️")
+
+        # Add Pivot Points to addplot if selected and data is available (for daily/weekly)
+        if selection.get("Pivot Points") and not is_intraday and not df_pivots.empty and len(df_pivots) > 1:
+            last_pivot = df_pivots.iloc[-1]
+            # Ensure pivot values are not NaN before attempting to plot
+            if not pd.isna(last_pivot.get('Pivot')):
+                # Create Series aligned with the chart's index (df.tail(120).index)
+                # This ensures the horizontal lines span the visible chart
+                chart_index = df.tail(120).index
+                
+                pivot_values = pd.Series(last_pivot['Pivot'], index=chart_index)
+                r1_values = pd.Series(last_pivot['R1'], index=chart_index)
+                s1_values = pd.Series(last_pivot['S1'], index=chart_index)
+                r2_values = pd.Series(last_pivot['R2'], index=chart_index)
+                s2_values = pd.Series(last_pivot['S2'], index=chart_index)
+
+                ap.append(mpf.make_addplot(pivot_values, color='purple', linestyle='--', panel=0, width=0.7, secondary_y=False, legend='Pivot'))
+                ap.append(mpf.make_addplot(r1_values, color='red', linestyle=':', panel=0, width=0.7, secondary_y=False, legend='R1'))
+                ap.append(mpf.make_addplot(s1_values, color='green', linestyle=':', panel=0, width=0.7, secondary_y=False, legend='S1'))
+                ap.append(mpf.make_addplot(r2_values, color='darkred', linestyle='--', panel=0, width=0.7, secondary_y=False, legend='R2'))
+                ap.append(mpf.make_addplot(s2_values, color='darkgreen', linestyle='--', panel=0, width=0.7, secondary_y=False, legend='S2'))
+            else:
+                st.info("Pivot Points data not fully available for plotting on chart.")
+
+
         if not df.empty:
             fig, axlist = mpf.plot(
                 df.tail(120),
@@ -192,7 +224,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
                 style='yahoo',
                 mav=mav_tuple,
                 volume=True,
-                addplot=ap,
+                addplot=ap, # ap is now guaranteed to be a list
                 title=f"{ticker} - {params['interval']} chart",
                 returnfig=True
             )

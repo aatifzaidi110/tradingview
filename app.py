@@ -1,4 +1,4 @@
-# app.py - Version 1.8
+# app.py - Version 1.9
 import sys
 import os
 import streamlit as st
@@ -24,7 +24,7 @@ from utils import (
     calculate_indicators, calculate_pivot_points,
     generate_signals_for_row, backtest_strategy,
     generate_option_trade_plan, convert_compound_to_100_scale, EXPERT_RATING_MAP,
-    get_moneyness, analyze_options_chain
+    get_moneyness, analyze_options_chain, convert_finviz_recom_to_score # Import the new function
 )
 try:
     from display_components import (
@@ -75,7 +75,7 @@ with st.sidebar.expander("Momentum & Volume Indicators"):
 with st.sidebar.expander("Display-Only Indicators"):
     indicator_selection.update({
         "Bollinger Bands": st.checkbox("Bollinger Bands Display", value=True),
-        "Pivot Points": st.checkbox("Pivot Points Display (Daily only)", value=True, disabled=(timeframe not in ["Swing Trading", "Position Trading"])),
+        "Pivot Points": st.checkbox("Pivot Points Display (Daily only)", value=True, disabled=(timeframe not in ["Scalp Trading", "Day Trading"])), # Pivot points are generally not used for intraday
     })
 
 st.sidebar.header("🧠 Qualitative Scores")
@@ -119,7 +119,8 @@ if st.button("🚀 Analyze Ticker"):
                 sentiment_score_current = 0
             
             if include_finviz_expert:
-                expert_score_current = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
+                # Use the new conversion function for expert score
+                expert_score_current = convert_finviz_recom_to_score(finviz_data['recom'])
             else:
                 expert_score_current = 0
         
@@ -203,4 +204,3 @@ if st.button("🚀 Analyze Ticker"):
             st.error(f"An unexpected error occurred during data processing for {ticker}: {e}", icon="🚫")
             st.exception(e)
             time.sleep(1)
-
