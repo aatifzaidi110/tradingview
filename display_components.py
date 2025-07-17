@@ -1,4 +1,4 @@
-# display_components.py - Version 1.20
+# display_components.py - Version 1.22
 
 import streamlit as st
 import pandas as pd
@@ -107,23 +107,6 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.write(f"**High:** ${week_52_high:.2f}" if isinstance(week_52_high, (int, float)) else f"**High:** {week_52_high}")
         st.write(f"**Low:** ${week_52_low:.2f}" if isinstance(week_52_low, (int, float)) else f"**Low:** {week_52_low}")
 
-        st.markdown("---")
-
-        # --- Support and Resistance Levels (from Pivot Points) ---
-        st.subheader("🛡️ Support & Resistance Levels")
-        if not df_pivots.empty and len(df_pivots) > 1:
-            last_pivot = df_pivots.iloc[-1]
-            if not pd.isna(last_pivot.get('Pivot')):
-                st.write(f"**Pivot Point:** ${last_pivot['Pivot']:.2f}")
-                st.write(f"**Resistance 1 (R1):** ${last_pivot['R1']:.2f}")
-                st.write(f"**Resistance 2 (R2):** ${last_pivot['R2']:.2f}")
-                st.write(f"**Support 1 (S1):** ${last_pivot['S1']:.2f}")
-                st.write(f"**Support 2 (S2):** ${last_pivot['S2']:.2f}")
-            else:
-                st.info("Pivot Points data not fully available for current levels.")
-        else:
-            st.info("Historical data not sufficient to calculate daily Pivot Points for support/resistance.")
-        
         st.markdown("---")
 
         st.subheader("✅ Technical Analysis Readout")
@@ -389,7 +372,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
             }
 
-            # Define the desired order of columns
+            # Define the desired order of columns (moved this definition up)
             desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
 
             # Prepare columns for display with tooltips
@@ -466,4 +449,3 @@ def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
     user_notes = st.text_area("Add your personal notes or trade thesis here:", key=f"trade_notes_{ticker}")
     
     st.info("Trade log functionality is pending implementation.")
-
