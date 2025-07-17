@@ -1,4 +1,4 @@
-# display_components.py - Version 1.25
+# display_components.py - Version 1.27
 
 import streamlit as st
 import pandas as pd
