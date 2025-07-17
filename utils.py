@@ -1,4 +1,4 @@
-# utils.py - Version 2.2
+# utils.py - Version 2.3
 
 import streamlit as st
 import yfinance as yf
@@ -61,7 +61,7 @@ def calculate_indicators(df, is_intraday=False):
     """Calculates various technical indicators for a given DataFrame."""
     required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
     if not all(col in df.columns for col in required_cols):
-        st.error(f"Missing one or more required columns for indicator calculation: {required_cols}", icon="�")
+        st.error(f"Missing one or more required columns for indicator calculation: {required_cols}", icon="🚫")
         return df
 
     df_cleaned = df.dropna(subset=['High', 'Low', 'Close', 'Volume']).copy()
@@ -70,8 +70,12 @@ def calculate_indicators(df, is_intraday=False):
         return df_cleaned
 
     # Use .loc for safe assignment to avoid SettingWithCopyWarning
-    try: df_cleaned.loc[:, "EMA21"]=ta.trend.ema_indicator(df_cleaned["Close"],21); df_cleaned.loc[:, "EMA50"]=ta.trend.ema_indicator(df_cleaned["Close"],50); df_cleaned.loc[:, "EMA200"]=ta.trend.ema_indicator(df_cleaned["Close"],200)
-    except Exception as e: st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
+    try:
+        df_cleaned.loc[:, "EMA21"] = ta.trend.ema_indicator(df_cleaned["Close"], 21)
+        df_cleaned.loc[:, "EMA50"] = ta.trend.ema_indicator(df_cleaned["Close"], 50)
+        df_cleaned.loc[:, "EMA200"] = ta.trend.ema_indicator(df_cleaned["Close"], 200)
+    except Exception as e:
+        st.warning(f"Could not calculate EMA indicators: {e}", icon="⚠️")
 
     # --- Corrected Ichimoku Cloud Calculation (using direct functions) ---
     try:
@@ -621,4 +625,3 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
-�
