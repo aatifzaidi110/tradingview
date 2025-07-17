@@ -1,4 +1,4 @@
-# display_components.py - Version 1.27
+# display_components.py - Version 1.29
 
 import streamlit as st
 import pandas as pd
@@ -351,83 +351,83 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                         {"Metric": "Open Interest", "Value": f"{rec_option.get('openInterest', None):,}" if rec_option.get('openInterest') is not None and not pd.isna(rec_option.get('openInterest')) else "N/A", "Description": "Total open contracts. High OI indicates good liquidity.", "Ideal for Buyers": "> 100s"},
                         {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                     ]
-                st.table(pd.DataFrame(option_metrics).set_index("Metric"))
-        else:
+                    st.table(pd.DataFrame(option_metrics).set_index("Metric"))
+        else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
+        
+        st.markdown("---")
+        st.subheader("⛓️ Full Option Chain")
+        option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True, key=f"option_type_{ticker}")
+        exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}")
+        if exp_date_str:
+            calls, puts = get_options_chain(ticker, exp_date_str)
+
+            # --- New Options Chain Analysis ---
+            st.markdown("##### Options Chain Highlights & Suggestions")
+            chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price)
             
+            if chain_analysis_results:
+                has_content = False
+                for category, options_list in chain_analysis_results.items():
+                    if options_list:
+                        has_content = True
+                        st.markdown(f"**{category}:**")
+                        for opt_summary in options_list:
+                            st.markdown(f"- **{opt_summary['Type']}** (Strike: ${opt_summary['Strike']:.2f}, Exp: {opt_summary['Expiration']}): {opt_summary['Reason']}")
+                if not has_content:
+                    st.info("No specific options chain highlights found for this expiration based on current criteria.")
+            else:
+                st.info("No detailed options chain analysis available for this expiration.")
             st.markdown("---")
-            st.subheader("⛓️ Full Option Chain")
-            option_type = st.radio("Select Option Type", ["Calls", "Puts"], horizontal=True, key=f"option_type_{ticker}")
-            exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}")
-            if exp_date_str:
-                calls, puts = get_options_chain(ticker, exp_date_str)
 
-                # --- New Options Chain Analysis ---
-                st.markdown("##### Options Chain Highlights & Suggestions")
-                chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price)
-                
-                if chain_analysis_results:
-                    has_content = False
-                    for category, options_list in chain_analysis_results.items():
-                        if options_list:
-                            has_content = True
-                            st.markdown(f"**{category}:**")
-                            for opt_summary in options_list:
-                                st.markdown(f"- **{opt_summary['Type']}** (Strike: ${opt_summary['Strike']:.2f}, Exp: {opt_summary['Expiration']}): {opt_summary['Reason']}")
-                    if not has_content:
-                        st.info("No specific options chain highlights found for this expiration based on current criteria.")
-                else:
-                    st.info("No detailed options chain analysis available for this expiration.")
-                st.markdown("---")
+            st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
+            
+            chain_to_display = calls if option_type == "Calls" else puts
+            chain_to_display_copy = chain_to_display.copy()
+            if 'strike' in chain_to_display_copy.columns:
+                chain_to_display_copy['Moneyness'] = chain_to_display_copy.apply(
+                    lambda row: get_moneyness(row['strike'], current_stock_price, "call" if option_type == "Calls" else "put"), axis=1
+                )
+            
+            # Define column descriptions for tooltips
+            column_descriptions = {
+                'strike': 'The predetermined price at which the underlying asset can be bought (for a call) or sold (for a put) when the option is exercised.',
+                'Moneyness': 'Describes an option\'s relationship between its strike price and the underlying asset\'s current price (In-The-Money, At-The-Money, or Out-of-The-Money).',
+                'lastPrice': 'The last traded price of that specific option contract.',
+                'bid': 'The highest price a buyer is willing to pay for the option.',
+                'ask': 'The lowest price a seller is willing to accept for the option.',
+                'volume': 'The number of option contracts traded for that specific strike and expiration today. High volume indicates high trading activity and liquidity.',
+                'openInterest': 'The total number of outstanding option contracts that have not yet been closed or exercised. High open interest suggests strong market interest and good liquidity for that particular contract.',
+                'impliedVolatility': 'The market\'s expectation of how much the underlying stock\'s price will move in the future. Higher implied volatility generally means higher option premiums (prices), as there\'s a greater chance of the option moving in-the-money.',
+                'delta': 'Measures how much an option\'s price is expected to move for every $1 change in the underlying stock\'s price. Also represents the approximate probability of an option expiring in-the-money.',
+                'theta': 'Measures the rate at which an option\'s price decays over time (time decay). Theta is typically negative, meaning the option loses value as it gets closer to expiration, all else being equal.',
+                'gamma': 'Measures the rate of change of an option\'s delta. High gamma means delta will change rapidly as the stock price moves.',
+                'vega': 'Measures how much an option\'s price is expected to change for every 1% change in implied volatility. Options with higher vega are more sensitive to changes in IV.',
+                'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
+            }
 
-                st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
-                
-                chain_to_display = calls if option_type == "Calls" else puts
-                chain_to_display_copy = chain_to_display.copy()
-                if 'strike' in chain_to_display_copy.columns:
-                    chain_to_display_copy['Moneyness'] = chain_to_display_copy.apply(
-                        lambda row: get_moneyness(row['strike'], current_stock_price, "call" if option_type == "Calls" else "put"), axis=1
+            # Define the desired order of columns (moved this definition up)
+            desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
+
+            # Prepare columns for display with tooltips
+            cols_to_display_with_tooltips = {}
+            for col in desired_cols_to_display:
+                if col in chain_to_display_copy.columns:
+                    cols_to_display_with_tooltips[col] = st.column_config.Column(
+                        col,
+                        help=column_descriptions.get(col, "No description available.")
                     )
-                
-                # Define column descriptions for tooltips
-                column_descriptions = {
-                    'strike': 'The predetermined price at which the underlying asset can be bought (for a call) or sold (for a put) when the option is exercised.',
-                    'Moneyness': 'Describes an option\'s relationship between its strike price and the underlying asset\'s current price (In-The-Money, At-The-Money, or Out-of-The-Money).',
-                    'lastPrice': 'The last traded price of that specific option contract.',
-                    'bid': 'The highest price a buyer is willing to pay for the option.',
-                    'ask': 'The lowest price a seller is willing to accept for the option.',
-                    'volume': 'The number of option contracts traded for that specific strike and expiration today. High volume indicates high trading activity and liquidity.',
-                    'openInterest': 'The total number of outstanding option contracts that have not yet been closed or exercised. High open interest suggests strong market interest and good liquidity for that particular contract.',
-                    'impliedVolatility': 'The market\'s expectation of how much the underlying stock\'s price will move in the future. Higher implied volatility generally means higher option premiums (prices), as there\'s a greater chance of the option moving in-the-money.',
-                    'delta': 'Measures how much an option\'s price is expected to move for every $1 change in the underlying stock\'s price. Also represents the approximate probability of an option expiring in-the-money.',
-                    'theta': 'Measures the rate at which an option\'s price decays over time (time decay). Theta is typically negative, meaning the option loses value as it gets closer to expiration, all else being equal.',
-                    'gamma': 'Measures the rate of change of an option\'s delta. High gamma means delta will change rapidly as the stock price moves.',
-                    'vega': 'Measures how much an option\'s price is expected to change for every 1% change in implied volatility. Options with higher vega are more sensitive to changes in IV.',
-                    'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
-                }
 
-                # Define the desired order of columns (moved this definition up)
-                desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
+            # Filter chain_to_display_copy to only include available and desired columns
+            final_cols_to_show = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
 
-                # Prepare columns for display with tooltips
-                cols_to_display_with_tooltips = {}
-                for col in desired_cols_to_display:
-                    if col in chain_to_display_copy.columns:
-                        cols_to_display_with_tooltips[col] = st.column_config.Column(
-                            col,
-                            help=column_descriptions.get(col, "No description available.")
-                        )
-
-                # Filter chain_to_display_copy to only include available and desired columns
-                final_cols_to_show = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
-
-                if final_cols_to_show:
-                    st.dataframe(
-                        chain_to_display_copy[final_cols_to_show].set_index('strike'),
-                        column_config=cols_to_display_with_tooltips
-                    )
-                else:
-                    st.info("No relevant columns found in the options chain to display.")
+            if final_cols_to_show:
+                st.dataframe(
+                    chain_to_display_copy[final_cols_to_show].set_index('strike'),
+                    column_config=cols_to_display_with_tooltips
+                )
+            else:
+                st.info("No relevant columns found in the options chain to display.")
 
 
 def display_backtest_tab(ticker, selection):
