@@ -1,4 +1,4 @@
-# utils.py - Version 1.4
+# utils.py - Version 1.5
 
 import streamlit as st
 import yfinance as yf
@@ -50,7 +50,7 @@ def get_data(symbol, period, interval):
                 return None, None
             return hist, stock.info
         except Exception as e:
-            st.error(f"YFinance error fetching data for {symbol}: {e}", icon="🚫")
+            st.error(f"YFinance error fetching data for {symbol}: {e}", icon="�")
             return None, None
 
 @st.cache_data(ttl=300)
@@ -268,7 +268,7 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
 
     first_valid_idx = df_historical_calculated_clean[required_cols_for_signals].first_valid_index()
     if first_valid_idx is None:
-        st.warning("No valid data points found after indicator calculation and cleaning for backtesting (all required columns are NaN at the start). This often happens if indicators require a lot of history or if data is very sparse.", icon="⚠️")
+        st.warning("No valid data points found after indicator calculation and cleaning for backtesting (all required columns are NaN at the start). This often happens if indicators require a lot of history or data is very sparse.", icon="⚠️")
         return [], 0, 0
 
     start_i = df_historical_calculated_clean.index.get_loc(first_valid_idx)
@@ -353,6 +353,219 @@ def backtest_strategy(df_historical_calculated, selection, atr_multiplier=1.5, r
 EXPERT_RATING_MAP = {"Strong Buy": 100, "Buy": 85, "Hold": 50, "N/A": 50, "Sell": 15, "Strong Sell": 0}
 
 def convert_compound_to_100_scale(compound_score): return int((compound_score + 1) * 50)
+
+def get_moneyness(strike, current_price, option_type="call"):
+    """Determines if an option is In-The-Money (ITM), At-The-Money (ATM), or Out-of-The-Money (OTM)."""
+    if option_type == "call":
+        if strike < current_price:
+            return "ITM"
+        elif strike > current_price:
+            return "OTM"
+        else:
+            return "ATM"
+    elif option_type == "put":
+        if strike > current_price:
+            return "ITM"
+            return "ITM"
+        elif strike < current_price:
+            return "OTM"
+        else:
+            return "ATM"
+    return "N/A"
+
+def analyze_options_chain(calls_df, puts_df, current_stock_price):
+    """
+    Analyzes the options chain to highlight key options based on various metrics
+    and provides suggestions for ITM, ATM, OTM.
+    """
+    analysis_results = {
+        "Highest Volume Options": [],
+        "Highest Open Interest Options": [],
+        "Highest Implied Volatility Options": [],
+        "Highest Delta Calls": [],
+        "Lowest Theta Calls": [],
+        "Highest Gamma Calls": [],
+        "Highest Vega Calls": [],
+        "ITM Call Suggestions": [],
+        "ATM Call Suggestions": [],
+        "OTM Call Suggestions": []
+    }
+
+    # Helper to format option summary
+    def format_option_summary(option_row, opt_type, reason):
+        return {
+            "Type": f"{opt_type} Option",
+            "Strike": option_row.get('strike', pd.NA),
+            "Expiration": option_row.get('expiration', pd.NA), # Assuming 'expiration' column exists or can be added
+            "Value": option_row.get('lastPrice', pd.NA),
+            "Reason": reason
+        }
+
+    # Analyze Calls
+    if not calls_df.empty:
+        # Add moneyness for filtering
+        calls_df_copy = calls_df.copy()
+        calls_df_copy['Moneyness'] = calls_df_copy.apply(
+            lambda row: get_moneyness(row['strike'], current_stock_price, "call"), axis=1
+        )
+        
+        # Highest Volume
+        if 'volume' in calls_df_copy.columns and not calls_df_copy['volume'].isnull().all():
+            highest_vol_call = calls_df_copy.loc[calls_df_copy['volume'].idxmax()]
+            analysis_results["Highest Volume Options"].append(format_option_summary(
+                highest_vol_call, "Call", f"Highest volume ({highest_vol_call['volume']:,}) indicates strong current interest."
+            ))
+
+        # Highest Open Interest
+        if 'openInterest' in calls_df_copy.columns and not calls_df_copy['openInterest'].isnull().all():
+            highest_oi_call = calls_df_copy.loc[calls_df_copy['openInterest'].idxmax()]
+            analysis_results["Highest Open Interest Options"].append(format_option_summary(
+                highest_oi_call, "Call", f"Highest open interest ({highest_oi_call['openInterest']:,}) suggests significant market positioning."
+            ))
+
+        # Highest Implied Volatility
+        if 'impliedVolatility' in calls_df_copy.columns and not calls_df_copy['impliedVolatility'].isnull().all():
+            highest_iv_call = calls_df_copy.loc[calls_df_copy['impliedVolatility'].idxmax()]
+            analysis_results["Highest Implied Volatility Options"].append(format_option_summary(
+                highest_iv_call, "Call", f"Highest IV ({highest_iv_call['impliedVolatility']:.2%}) indicates high expected price movement."
+            ))
+        
+        # Highest Delta Calls
+        if 'delta' in calls_df_copy.columns and not calls_df_copy['delta'].isnull().all():
+            highest_delta_call = calls_df_copy.loc[calls_df_copy['delta'].idxmax()]
+            analysis_results["Highest Delta Calls"].append(format_option_summary(
+                highest_delta_call, "Call", f"Highest Delta ({highest_delta_call['delta']:.2f}) means price moves most with stock."
+            ))
+
+        # Lowest Theta Calls (for buyers)
+        if 'theta' in calls_df_copy.columns and not calls_df_copy['theta'].isnull().all():
+            lowest_theta_call = calls_df_copy.loc[calls_df_copy['theta'].idxmax()] # Theta is typically negative, so max is closest to zero
+            analysis_results["Lowest Theta Calls"].append(format_option_summary(
+                lowest_theta_call, "Call", f"Lowest Theta ({lowest_theta_call['theta']:.3f}) means less time decay."
+            ))
+        
+        # Highest Gamma Calls
+        if 'gamma' in calls_df_copy.columns and not calls_df_copy['gamma'].isnull().all():
+            highest_gamma_call = calls_df_copy.loc[calls_df_copy['gamma'].idxmax()]
+            analysis_results["Highest Gamma Calls"].append(format_option_summary(
+                highest_gamma_call, "Call", f"Highest Gamma ({highest_gamma_call['gamma']:.3f}) means fastest changing Delta."
+            ))
+
+        # Highest Vega Calls
+        if 'vega' in calls_df_copy.columns and not calls_df_copy['vega'].isnull().all():
+            highest_vega_call = calls_df_copy.loc[calls_df_copy['vega'].idxmax()]
+            analysis_results["Highest Vega Calls"].append(format_option_summary(
+                highest_vega_call, "Call", f"Highest Vega ({highest_vega_call['vega']:.3f}) means most sensitive to IV changes."
+            ))
+
+        # ITM Call Suggestions
+        itm_calls = calls_df_copy[calls_df_copy['Moneyness'] == 'ITM'].sort_values(by='strike', ascending=False)
+        if not itm_calls.empty:
+            best_itm = itm_calls.iloc[0]
+            analysis_results["ITM Call Suggestions"].append(format_option_summary(
+                best_itm, "Call", "Deep ITM calls offer high delta, behaving more like stock."
+            ))
+        
+        # ATM Call Suggestions
+        atm_calls = calls_df_copy[calls_df_copy['Moneyness'] == 'ATM']
+        if not atm_calls.empty:
+            best_atm = atm_calls.iloc[0]
+            analysis_results["ATM Call Suggestions"].append(format_option_summary(
+                best_atm, "Call", "ATM calls balance cost and directional exposure."
+            ))
+
+        # OTM Call Suggestions
+        otm_calls = calls_df_copy[calls_df_copy['Moneyness'] == 'OTM'].sort_values(by='strike', ascending=True)
+        if not otm_calls.empty:
+            best_otm = otm_calls.iloc[0]
+            analysis_results["OTM Call Suggestions"].append(format_option_summary(
+                best_otm, "Call", "OTM calls are cheaper and offer high leverage, but lower probability."
+            ))
+
+    # Analyze Puts (similar logic, but for puts)
+    if not puts_df.empty:
+        # Add moneyness for filtering
+        puts_df_copy = puts_df.copy()
+        puts_df_copy['Moneyness'] = puts_df_copy.apply(
+            lambda row: get_moneyness(row['strike'], current_stock_price, "put"), axis=1
+        )
+
+        # Highest Volume (Puts)
+        if 'volume' in puts_df_copy.columns and not puts_df_copy['volume'].isnull().all():
+            highest_vol_put = puts_df_copy.loc[puts_df_copy['volume'].idxmax()]
+            analysis_results["Highest Volume Options"].append(format_option_summary(
+                highest_vol_put, "Put", f"Highest volume ({highest_vol_put['volume']:,}) indicates strong current interest."
+            ))
+
+        # Highest Open Interest (Puts)
+        if 'openInterest' in puts_df_copy.columns and not puts_df_copy['openInterest'].isnull().all():
+            highest_oi_put = puts_df_copy.loc[puts_df_copy['openInterest'].idxmax()]
+            analysis_results["Highest Open Interest Options"].append(format_option_summary(
+                highest_oi_put, "Put", f"Highest open interest ({highest_oi_put['openInterest']:,}) suggests significant market positioning."
+            ))
+
+        # Highest Implied Volatility (Puts)
+        if 'impliedVolatility' in puts_df_copy.columns and not puts_df_copy['impliedVolatility'].isnull().all():
+            highest_iv_put = puts_df_copy.loc[puts_df_copy['impliedVolatility'].idxmax()]
+            analysis_results["Highest Implied Volatility Options"].append(format_option_summary(
+                highest_iv_put, "Put", f"Highest IV ({highest_iv_put['impliedVolatility']:.2%}) indicates high expected price movement."
+            ))
+        
+        # Highest Delta Puts (most negative delta, i.e., closest to -1.0)
+        if 'delta' in puts_df_copy.columns and not puts_df_copy['delta'].isnull().all():
+            # For puts, highest delta (in magnitude) is the most negative
+            highest_delta_put = puts_df_copy.loc[puts_df_copy['delta'].idxmin()] 
+            analysis_results["Highest Delta Puts"].append(format_option_summary(
+                highest_delta_put, "Put", f"Highest Delta ({highest_delta_put['delta']:.2f}) means price moves most with stock (inversely)."
+            ))
+
+        # Lowest Theta Puts (for buyers)
+        if 'theta' in puts_df_copy.columns and not puts_df_copy['theta'].isnull().all():
+            lowest_theta_put = puts_df_copy.loc[puts_df_copy['theta'].idxmax()]
+            analysis_results["Lowest Theta Puts"].append(format_option_summary(
+                lowest_theta_put, "Put", f"Lowest Theta ({lowest_theta_put['theta']:.3f}) means less time decay."
+            ))
+
+        # Highest Gamma Puts
+        if 'gamma' in puts_df_copy.columns and not puts_df_copy['gamma'].isnull().all():
+            highest_gamma_put = puts_df_copy.loc[puts_df_copy['gamma'].idxmax()]
+            analysis_results["Highest Gamma Puts"].append(format_option_summary(
+                highest_gamma_put, "Put", f"Highest Gamma ({highest_gamma_put['gamma']:.3f}) means fastest changing Delta."
+            ))
+
+        # Highest Vega Puts
+        if 'vega' in puts_df_copy.columns and not puts_df_copy['vega'].isnull().all():
+            highest_vega_put = puts_df_copy.loc[puts_df_copy['vega'].idxmax()]
+            analysis_results["Highest Vega Puts"].append(format_option_summary(
+                highest_vega_put, "Put", f"Highest Vega ({highest_vega_put['vega']:.3f}) means most sensitive to IV changes."
+            ))
+
+        # ITM Put Suggestions
+        itm_puts = puts_df_copy[puts_df_copy['Moneyness'] == 'ITM'].sort_values(by='strike', ascending=True)
+        if not itm_puts.empty:
+            best_itm_put = itm_puts.iloc[0]
+            analysis_results["ITM Put Suggestions"].append(format_option_summary(
+                best_itm_put, "Put", "Deep ITM puts offer high delta, behaving more like stock (inversely)."
+            ))
+        
+        # ATM Put Suggestions
+        atm_puts = puts_df_copy[puts_df_copy['Moneyness'] == 'ATM']
+        if not atm_puts.empty:
+            best_atm_put = atm_puts.iloc[0]
+            analysis_results["ATM Put Suggestions"].append(format_option_summary(
+                best_atm_put, "Put", "ATM puts balance cost and directional exposure."
+            ))
+
+        # OTM Put Suggestions
+        otm_puts = puts_df_copy[puts_df_copy['Moneyness'] == 'OTM'].sort_values(by='strike', ascending=False)
+        if not otm_puts.empty:
+            best_otm_put = otm_puts.iloc[0]
+            analysis_results["OTM Put Suggestions"].append(format_option_summary(
+                best_otm_put, "Put", "OTM puts are cheaper and offer high leverage, but lower probability."
+            ))
+
+    return analysis_results
+
 
 def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
     """Generates an options trade plan based on confidence and available expirations."""
@@ -460,7 +673,7 @@ def generate_option_trade_plan(ticker, confidence, stock_price, expirations):
 
     elif 60 <= confidence < 75:
         strategy = "Buy ATM Call"
-        reason = f"Moderate confidence ({confidence:.0f}% bullish) favors an At-the-Money call to balance cost and potential upside."
+        reason = f"Moderate confidence ({confidence:.0f}% bullish) favors an At-the-Money (ATM) call to balance cost and potential upside."
         if 'strike' in calls.columns:
             target_options = calls.iloc[[(calls['strike'] - stock_price).abs().idxmin()]]
         else:
@@ -514,3 +727,4 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
+�

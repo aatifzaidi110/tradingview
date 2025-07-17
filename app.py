@@ -1,4 +1,4 @@
-# app.py - Version 1.6
+# app.py - Version 1.7
 import sys
 import os
 import streamlit as st
@@ -23,13 +23,15 @@ from utils import (
     get_finviz_data, get_data, get_options_chain,
     calculate_indicators, calculate_pivot_points,
     generate_signals_for_row, backtest_strategy,
-    generate_option_trade_plan, convert_compound_to_100_scale, EXPERT_RATING_MAP
+    generate_option_trade_plan, convert_compound_to_100_scale, EXPERT_RATING_MAP,
+    get_moneyness, analyze_options_chain # Import new functions
 )
 try:
     from display_components import (
         display_main_analysis_tab, display_trade_plan_options_tab,
         display_backtest_tab, display_news_info_tab, display_trade_log_tab
     )
+    from glossary_components import display_glossary_tab # Import new glossary tab
 except ImportError as e:
     print("Import error details:", str(e))
     raise
@@ -172,8 +174,8 @@ if st.button("🚀 Analyze Ticker"):
                 overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
 
                 # Display tabs
-                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
+                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log", "📚 Glossary"] # Added Glossary tab
+                main_tab, trade_tab, backtest_tab, news_tab, log_tab, glossary_tab = st.tabs(tab_list)
 
                 with main_tab:
                     display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score_current, expert_score_current, df_pivots, use_automation and (include_finviz_sentiment or include_finviz_expert))
@@ -189,6 +191,9 @@ if st.button("🚀 Analyze Ticker"):
                 
                 with log_tab:
                     display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
+
+                with glossary_tab: # New Glossary Tab
+                    display_glossary_tab(current_stock_price=df_calculated.iloc[-1]['Close']) # Pass current price for options examples
             
         except Exception as e:
             st.error(f"An unexpected error occurred during data processing for {ticker}: {e}", icon="🚫")

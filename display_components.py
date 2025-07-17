@@ -1,4 +1,4 @@
-# display_components.py - Version 1.16
+# display_components.py - Version 1.17
 
 import streamlit as st
 import pandas as pd
@@ -8,52 +8,9 @@ import yfinance as yf # Ensure yfinance is imported here
 import os # For chart saving/removing, though direct plot is preferred
 
 # Import functions from utils.py
-from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points, EXPERT_RATING_MAP # Import EXPERT_RATING_MAP here
+from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points, EXPERT_RATING_MAP, get_moneyness, analyze_options_chain # Import get_moneyness and analyze_options_chain
 
-# === Indicator Descriptions Glossary ===
-INDICATOR_DESCRIPTIONS = {
-    "Uptrend (21>50>200 EMA)": {
-        "description": "Exponential Moving Averages (EMAs) smooth price data to identify trend direction. A bullish trend is indicated when shorter EMAs (e.g., 21-day) are above longer EMAs (e.g., 50-day), and both are above the longest EMA (e.g., 200-day).",
-        "ideal": "21 EMA > 50 EMA > 200 EMA"
-    },
-    "Bullish PSAR": {
-        "description": "Parabolic Stop and Reverse (PSAR) is a time and price based trading system used to identify potential reversals in the price movement of traded assets. Bullish when dots are below price.",
-        "ideal": "Dots below price"
-    },
-    "Strong Trend (ADX > 25)": {
-        "description": "The Average Directional Index (ADX) quantifies the strength of a trend. Values above 25 generally indicate a strong trend (either up or down), while values below 20 suggest a weak or non-trending market.",
-        "ideal": "ADX > 25"
-    },
-    "Bullish Momentum (RSI > 50)": {
-        "description": "The Relative Strength Index (RSI) is a momentum oscillator measuring the speed and change of price movements. An RSI above 50 generally suggests bullish momentum, while below 50 indicates bearish momentum.",
-        "ideal": "RSI > 50"
-    },
-    "Bullish Stoch Cross": {
-        "description": "The Stochastic Oscillator is a momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period. A bullish cross occurs when %K (fast line) crosses above %D (slow line), often below 50.",
-        "ideal": "%K line crosses above %D (preferably below 50)"
-    },
-    "Bullish CCI (>0)": {
-        "description": "The Commodity Channel Index (CCI) measures the current price level relative to an average price level over a given period. A CCI above zero generally indicates the price is above its average, suggesting an uptrend.",
-        "ideal": "CCI > 0"
-    },
-    "Positive ROC (>0)": {
-        "description": "Rate of Change (ROC) is a momentum indicator that measures the percentage change between the current price and the price a certain number of periods ago. A positive ROC indicates upward momentum.",
-        "ideal": "ROC > 0"
-    },
-    "Volume Spike (>1.5x Avg)": {
-        "description": "A volume spike indicates an unusual increase in trading activity, which often precedes or accompanies significant price movements. A volume greater than 1.5 times the average suggests strong interest.",
-        "ideal": "Volume > 1.5x 50-day Average Volume"
-    },
-    "OBV Rising": {
-        "description": "On-Balance Volume (OBV) relates volume to price changes. A rising OBV indicates that positive volume pressure is increasing and confirms an uptrend.",
-        "ideal": "OBV is rising (higher than its recent average)"
-    },
-    "Price > VWAP": {
-        "description": "Volume Weighted Average Price (VWAP) is a trading benchmark that represents the average price a security has traded at throughout the day, based on both volume and price. Price trading above VWAP is considered bullish.",
-        "ideal": "Price > VWAP"
-    }
-}
-
+# Removed INDICATOR_DESCRIPTIONS as it's now in glossary_components.py
 
 # === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, selected, signals_dict): # Removed description, ideal_value_desc
@@ -174,77 +131,39 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.markdown("---") # Separator
 
         st.subheader("✅ Technical Analysis Readout")
+        # Removed the inline expanders for descriptions here.
+        # Users can now find detailed descriptions in the new Glossary tab.
         with st.expander("📈 Trend Indicators", expanded=True):
-            # EMA Trend
             if selection.get("EMA Trend"):
                 st.markdown(format_indicator_display("Uptrend (21>50>200 EMA)", None, selection.get("EMA Trend"), signals))
-                with st.expander(f"Details for EMA Trend"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Uptrend (21>50>200 EMA)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Uptrend (21>50>200 EMA)']['ideal']}")
             
-            # Parabolic SAR
             if selection.get("Parabolic SAR"):
                 st.markdown(format_indicator_display("Bullish PSAR", last.get('psar'), selection.get("Parabolic SAR"), signals))
-                with st.expander(f"Details for Parabolic SAR"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Bullish PSAR']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Bullish PSAR']['ideal']}")
 
-            # ADX
             if selection.get("ADX"):
                 st.markdown(format_indicator_display("Strong Trend (ADX > 25)", last.get('adx'), selection.get("ADX"), signals))
-                with st.expander(f"Details for ADX"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Strong Trend (ADX > 25)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Strong Trend (ADX > 25)']['ideal']}")
         
         with st.expander("💨 Momentum & Volume Indicators", expanded=True):
-            # RSI Momentum
             if selection.get("RSI Momentum"):
                 st.markdown(format_indicator_display("Bullish Momentum (RSI > 50)", last.get('RSI'), selection.get("RSI Momentum"), signals))
-                with st.expander(f"Details for RSI Momentum"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Bullish Momentum (RSI > 50)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Bullish Momentum (RSI > 50)']['ideal']}")
 
-            # Stochastic
             if selection.get("Stochastic"):
                 st.markdown(format_indicator_display("Bullish Stoch Cross", last.get('stoch_k'), selection.get("Stochastic"), signals))
-                with st.expander(f"Details for Stochastic Oscillator"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Bullish Stoch Cross']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Bullish Stoch Cross']['ideal']}")
 
-            # CCI
             if selection.get("CCI"):
                 st.markdown(format_indicator_display("Bullish CCI (>0)", last.get('cci'), selection.get("CCI"), signals))
-                with st.expander(f"Details for CCI"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Bullish CCI (>0)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Bullish CCI (>0)']['ideal']}")
 
-            # ROC
             if selection.get("ROC"):
                 st.markdown(format_indicator_display("Positive ROC (>0)", last.get('roc'), selection.get("ROC"), signals))
-                with st.expander(f"Details for ROC"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Positive ROC (>0)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Positive ROC (>0)']['ideal']}")
 
-            # Volume Spike
             if selection.get("Volume Spike"):
                 st.markdown(format_indicator_display("Volume Spike (>1.5x Avg)", last.get('Volume'), selection.get("Volume Spike"), signals))
-                with st.expander(f"Details for Volume Spike"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Volume Spike (>1.5x Avg)']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Volume Spike (>1.5x Avg)']['ideal']}")
 
-            # OBV
             if selection.get("OBV"):
                 st.markdown(format_indicator_display("OBV Rising", last.get('obv'), selection.get("OBV"), signals))
-                with st.expander(f"Details for OBV"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['OBV Rising']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['OBV Rising']['ideal']}")
             
-            # VWAP (Intraday only)
             if is_intraday and selection.get("VWAP"):
                 st.markdown(format_indicator_display("Price > VWAP", last.get('vwap'), selection.get("VWAP"), signals))
-                with st.expander(f"Details for VWAP"):
-                    st.markdown(f"**Description:** {INDICATOR_DESCRIPTIONS['Price > VWAP']['description']}")
-                    st.markdown(f"**Ideal (Bullish):** {INDICATOR_DESCRIPTIONS['Price > VWAP']['ideal']}")
         
         with st.expander("📊 Display-Only Indicators Status"):
             # Bollinger Bands Status
@@ -308,24 +227,6 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
     """Displays the suggested trade plan and options strategy."""
     last = df.iloc[-1]
     current_stock_price = last['Close'] # Get current stock price for moneyness calculation
-
-    # Helper to determine moneyness - MOVED TO TOP OF FUNCTION
-    def get_moneyness(strike, current_price, option_type="call"):
-        if option_type == "call":
-            if strike < current_price:
-                return "ITM"
-            elif strike > current_price:
-                return "OTM"
-            else:
-                return "ATM"
-        elif option_type == "put":
-            if strike > current_price:
-                return "ITM"
-            elif strike < current_price:
-                return "OTM"
-            else:
-                return "ATM"
-        return "N/A"
 
     st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
     entry_zone_start = last['EMA21'] * 0.99 if 'EMA21' in last and not pd.isna(last['EMA21']) else last['Close'] * 0.99
@@ -450,6 +351,27 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
         exp_date_str = st.selectbox("Select Expiration Date to View", expirations, key=f"exp_date_select_{ticker}") # Added unique key
         if exp_date_str:
             calls, puts = get_options_chain(ticker, exp_date_str)
+
+            # --- New Options Chain Analysis ---
+            st.markdown("##### Options Chain Highlights & Suggestions")
+            chain_analysis_results = analyze_options_chain(calls, puts, current_stock_price)
+            
+            if chain_analysis_results:
+                # Display sections only if they have content
+                has_content = False
+                for category, options_list in chain_analysis_results.items():
+                    if options_list:
+                        has_content = True
+                        st.markdown(f"**{category}:**")
+                        for opt_summary in options_list:
+                            st.markdown(f"- **{opt_summary['Type']}** (Strike: ${opt_summary['Strike']:.2f}, Exp: {opt_summary['Expiration']}): {opt_summary['Reason']}")
+                if not has_content:
+                    st.info("No specific options chain highlights found for this expiration based on current criteria.")
+            else:
+                st.info("No detailed options chain analysis available for this expiration.")
+            st.markdown("---")
+            # --- End New Options Chain Analysis ---
+
             st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
             
             chain_to_display = calls if option_type == "Calls" else puts
