@@ -1,4 +1,4 @@
-# display_components.py - Version 1.13
+# display_components.py - Version 1.14
 
 import streamlit as st
 import pandas as pd
@@ -47,6 +47,29 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
 
     col1, col2 = st.columns([1, 2])
     with col1:
+        # --- Ticker Price and General Info (Moved to Top) ---
+        st.subheader(f"📊 {info.get('longName', ticker)}")
+        st.write(f"**Ticker:** {ticker}")
+
+        current_price = last['Close']
+        prev_close = df['Close'].iloc[-2] if len(df) >= 2 else current_price
+        price_delta = current_price - prev_close
+        
+        # Determine bullish/bearish based on overall confidence
+        sentiment_status = "Neutral"
+        sentiment_icon = "⚪"
+        if overall_confidence >= 65:
+            sentiment_status = "Bullish"
+            sentiment_icon = "⬆️"
+        elif overall_confidence <= 35:
+            sentiment_status = "Bearish"
+            sentiment_icon = "⬇️"
+        
+        st.metric(label="Current Price", value=f"${current_price:.2f}", delta=f"${price_delta:.2f}")
+        st.markdown(f"**Overall Sentiment:** {sentiment_icon} {sentiment_status}")
+
+        st.markdown("---") # Separator
+
         st.subheader("💡 Confidence Score")
         st.metric("Overall Confidence", f"{overall_confidence:.0f}/100")
         st.progress(overall_confidence / 100)
@@ -61,12 +84,34 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         if show_finviz_link:
             st.markdown(f"**Source for Sentiment & Expert Scores:** [Finviz.com]({f'https://finviz.com/quote.ashx?t={ticker}'})")
 
-        st.subheader("🎯 Key Price Levels")
-        current_price = last['Close']
-        prev_close = df['Close'].iloc[-2] if len(df) >= 2 else current_price
-        price_delta = current_price - prev_close
-        st.metric(label="Current Price", value=f"${current_price:.2f}", delta=f"${price_delta:.2f}")
+        st.markdown("---") # Separator
+
+        # --- 52-Week High/Low ---
+        st.subheader("🗓️ 52-Week Range")
+        week_52_high = info.get('fiftyTwoWeekHigh', 'N/A')
+        week_52_low = info.get('fiftyTwoWeekLow', 'N/A')
+        st.write(f"**High:** ${week_52_high:.2f}" if isinstance(week_52_high, (int, float)) else f"**High:** {week_52_high}")
+        st.write(f"**Low:** ${week_52_low:.2f}" if isinstance(week_52_low, (int, float)) else f"**Low:** {week_52_low}")
+
+        st.markdown("---") # Separator
+
+        # --- Support and Resistance Levels (from Pivot Points) ---
+        st.subheader("🛡️ Support & Resistance Levels")
+        if not df_pivots.empty and len(df_pivots) > 1:
+            last_pivot = df_pivots.iloc[-1]
+            if not pd.isna(last_pivot.get('Pivot')):
+                st.write(f"**Pivot Point:** ${last_pivot['Pivot']:.2f}")
+                st.write(f"**Resistance 1 (R1):** ${last_pivot['R1']:.2f}")
+                st.write(f"**Resistance 2 (R2):** ${last_pivot['R2']:.2f}")
+                st.write(f"**Support 1 (S1):** ${last_pivot['S1']:.2f}")
+                st.write(f"**Support 2 (S2):** ${last_pivot['S2']:.2f}")
+            else:
+                st.info("Pivot Points data not fully available for current levels.")
+        else:
+            st.info("Historical data not sufficient to calculate daily Pivot Points for support/resistance.")
         
+        st.markdown("---") # Separator
+
         st.subheader("✅ Technical Analysis Readout")
         with st.expander("📈 Trend Indicators", expanded=True):
             st.markdown(format_indicator_display(
