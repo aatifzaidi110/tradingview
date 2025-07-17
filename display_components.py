@@ -352,7 +352,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                         {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
-            else:
+        else:
             st.warning(trade_plan['message'])
             
             st.markdown("---")
