@@ -1,4 +1,4 @@
-# display_components.py - Version 1.10
+# display_components.py - Version 1.12
 
 import streamlit as st
 import pandas as pd
@@ -201,6 +201,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
 def display_trade_plan_options_tab(ticker, df, overall_confidence):
     """Displays the suggested trade plan and options strategy."""
     last = df.iloc[-1]
+    current_stock_price = last['Close'] # Get current stock price for moneyness calculation
 
     st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
     entry_zone_start = last['EMA21'] * 0.99 if 'EMA21' in last and not pd.isna(last['EMA21']) else last['Close'] * 0.99
@@ -221,7 +222,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
     if not expirations:
         st.warning("No options data available for this ticker.")
     else:
-        trade_plan = generate_option_trade_plan(ticker, overall_confidence, last['Close'], expirations)
+        trade_plan = generate_option_trade_plan(ticker, overall_confidence, current_stock_price, expirations)
         
         # --- Start of new detailed options display ---
         if trade_plan['status'] == 'success':
@@ -239,13 +240,33 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 st.markdown("---")
                 st.subheader("🔬 Recommended Option Deep-Dive (Spread Legs)")
                 
+                # Helper to determine moneyness
+                def get_moneyness(strike, current_price, option_type="call"):
+                    if option_type == "call":
+                        if strike < current_price:
+                            return "ITM"
+                        elif strike > current_price:
+                            return "OTM"
+                        else:
+                            return "ATM"
+                    elif option_type == "put":
+                        if strike > current_price:
+                            return "ITM"
+                        elif strike < current_price:
+                            return "OTM"
+                        else:
+                            return "ATM"
+                    return "N/A"
+
                 # Check if 'Buy' leg exists before accessing
                 if 'Buy' in trade_plan['Contracts']:
                     st.write("**Buy Leg:**")
                     rec_option_buy = trade_plan['Contracts']['Buy']
-                    # Use .get() with a default value of None, then check for None or pd.isna
+                    moneyness_buy = get_moneyness(rec_option_buy.get('strike'), current_stock_price, "call")
+
                     option_metrics_buy = [
                         {"Metric": "Strike", "Value": f"${rec_option_buy.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
+                        {"Metric": "Moneyness", "Value": moneyness_buy, "Description": "In-The-Money (ITM), At-The-Money (ATM), or Out-of-The-Money (OTM).", "Ideal for Buyers": "Depends on strategy"},
                         {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
                         {"Metric": f"Value ({ticker})", "Value": f"${rec_option_buy.get('lastPrice', None):.2f}" if rec_option_buy.get('lastPrice') is not None and not pd.isna(rec_option_buy.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
                         {"Metric": "Bid", "Value": f"${rec_option_buy.get('bid', None):.2f}" if rec_option_buy.get('bid') is not None and not pd.isna(rec_option_buy.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
@@ -267,8 +288,11 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 if 'Sell' in trade_plan['Contracts']:
                     st.write("**Sell Leg:**")
                     rec_option_sell = trade_plan['Contracts']['Sell']
+                    moneyness_sell = get_moneyness(rec_option_sell.get('strike'), current_stock_price, "call")
+
                     option_metrics_sell = [
                         {"Metric": "Strike", "Value": f"${rec_option_sell.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Sellers": "Higher for calls, lower for puts"},
+                        {"Metric": "Moneyness", "Value": moneyness_sell, "Description": "In-The-Money (ITM), At-The-Money (ATM), or Out-of-The-Money (OTM).", "Ideal for Sellers": "Depends on strategy"},
                         {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Sellers": "Shorter term (to maximize time decay)"},
                         {"Metric": f"Value ({ticker})", "Value": f"${rec_option_sell.get('lastPrice', None):.2f}" if rec_option_sell.get('lastPrice') is not None and not pd.isna(rec_option_sell.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Sellers": "Higher to enter"},
                         {"Metric": "Bid", "Value": f"${rec_option_sell.get('bid', None):.2f}" if rec_option_sell.get('bid') is not None and not pd.isna(rec_option_sell.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Sellers": "Higher to enter"},
@@ -288,10 +312,16 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
 
             else: # Single Call strategy (Buy ITM Call or Buy ATM Call)
                 rec_option = trade_plan['Contract']
+                entry_premium = rec_option.get('ask', rec_option.get('lastPrice', 0))
+                moneyness = get_moneyness(rec_option.get('strike'), current_stock_price, "call")
+                
                 option_metrics = [
                     {"Metric": "Strike", "Value": f"${rec_option.get('strike', 0):.2f}", "Description": "The price at which the option can be exercised.", "Ideal for Buyers": "Lower for calls, higher for puts"},
+                    {"Metric": "Moneyness", "Value": moneyness, "Description": "In-The-Money (ITM), At-The-Money (ATM), or Out-of-The-Money (OTM).", "Ideal for Buyers": "Depends on strategy"},
                     {"Metric": "Expiration", "Value": trade_plan['Expiration'], "Description": "Date the option expires.", "Ideal for Buyers": "Longer term (45-365 days)"},
-                    {"Metric": f"Value ({ticker})", "Value": f"${rec_option.get('lastPrice', None):.2f}" if rec_option.get('lastPrice') is not None and not pd.isna(rec_option.get('lastPrice')) else "N/A", "Description": "The last traded price of the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "Entry Premium", "Value": f"${entry_premium:.2f}" if entry_premium is not None and not pd.isna(entry_premium) else "N/A", "Description": "The cost paid per share for the option.", "Ideal for Buyers": "Lower to enter"},
+                    {"Metric": "**Max Loss (per share)**", "Value": f"${entry_premium:.2f}" if entry_premium is not None and not pd.isna(entry_premium) else "N/A", "Description": "The maximum theoretical loss is the premium paid for the option.", "Ideal for Buyers": "Lower"},
+                    {"Metric": "Profit Target (per share)", "Value": f"${trade_plan.get('Profit Target', 'N/A')}" if trade_plan.get('Profit Target') is not None else "N/A", "Description": "The target price for the option to reach for profit.", "Ideal for Buyers": "Higher"},
                     {"Metric": "Bid", "Value": f"${rec_option.get('bid', None):.2f}" if rec_option.get('bid') is not None and not pd.isna(rec_option.get('bid')) else "N/A", "Description": "Highest price a buyer is willing to pay.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Ask", "Value": f"${rec_option.get('ask', None):.2f}" if rec_option.get('ask') is not None and not pd.isna(rec_option.get('ask')) else "N/A", "Description": "Lowest price a seller is willing to accept.", "Ideal for Buyers": "Lower to enter"},
                     {"Metric": "Implied Volatility (IV)", "Value": f"{rec_option.get('impliedVolatility', None):.2%}" if rec_option.get('impliedVolatility') is not None and not pd.isna(rec_option.get('impliedVolatility')) else "N/A", "Description": "Market's forecast of volatility. High IV = expensive premium.", "Ideal for Buyers": "Lower is better"},
@@ -317,9 +347,18 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
             st.markdown(f"[**🔗 Analyze this chain on OptionCharts.io**](https://optioncharts.io/options/{ticker}/chain/{exp_date_str})")
             
             chain_to_display = calls if option_type == "Calls" else puts
-            desired_cols = ['strike', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'inTheMoney', 'delta', 'theta', 'gamma', 'vega', 'rho']
-            available_cols = [col for col in desired_cols if col in chain_to_display.columns]
-            if available_cols: st.dataframe(chain_to_display[available_cols].set_index('strike'))
+            # Ensure 'inTheMoney' is available in the dataframe for display
+            chain_to_display_copy = chain_to_display.copy()
+            if 'strike' in chain_to_display_copy.columns:
+                chain_to_display_copy['Moneyness'] = chain_to_display_copy.apply(
+                    lambda row: get_moneyness(row['strike'], current_stock_price, "call" if option_type == "Calls" else "put"), axis=1
+                )
+            
+            desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
+            available_cols = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
+            if available_cols: st.dataframe(chain_to_display_copy[available_cols].set_index('strike'))
+            else: st.info("No relevant columns found in the options chain to display.")
+
 
 def display_backtest_tab(ticker, selection):
     """Displays the historical backtest results."""
