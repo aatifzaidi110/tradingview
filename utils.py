@@ -1,4 +1,4 @@
-# utils.py - Version 1.6
+# utils.py - Version 1.7
 
 import streamlit as st
 import yfinance as yf
@@ -50,7 +50,7 @@ def get_data(symbol, period, interval):
                 return None, None
             return hist, stock.info
         except Exception as e:
-            st.error(f"YFinance error fetching data for {symbol}: {e}", icon="�")
+            st.error(f"YFinance error fetching data for {symbol}: {e}", icon="🚫")
             return None, None
 
 @st.cache_data(ttl=300)
@@ -726,4 +726,3 @@ def get_options_suggestion(confidence, stock_price, calls_df):
         return "warning", f"Moderate Confidence ({confidence:.0f}%), but ATM call not found.", "Consider OTM calls or re-evaluate.", None
     else:
         return "warning", f"Low Confidence ({confidence:.0f}%): Options trading is not recommended at this time due to low overall confidence.", "Focus on further analysis or paper trading.", None
-�
