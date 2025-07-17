@@ -1,4 +1,4 @@
-# app.py - Version 1.9
+# app.py - Version 1.10
 import sys
 import os
 import streamlit as st
@@ -113,16 +113,20 @@ if st.button("🚀 Analyze Ticker"):
 
         if use_automation and (include_finviz_sentiment or include_finviz_expert):
             finviz_data = get_finviz_data(ticker)
-            if include_finviz_sentiment:
-                sentiment_score_current = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
+            if finviz_data.get('error'): # Check for error message from get_finviz_data
+                st.warning(f"Could not fetch live Finviz data for sentiment and expert rating due to: {finviz_data['error']}. Using default/manual scores.", icon="⚠️")
+                # Keep sentiment_score_current and expert_score_current as their initial values (manual or 50)
             else:
-                sentiment_score_current = 0
-            
-            if include_finviz_expert:
-                # Use the new conversion function for expert score
-                expert_score_current = convert_finviz_recom_to_score(finviz_data['recom'])
-            else:
-                expert_score_current = 0
+                if include_finviz_sentiment:
+                    sentiment_score_current = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
+                else:
+                    sentiment_score_current = 0
+                
+                if include_finviz_expert:
+                    # Use the new conversion function for expert score
+                    expert_score_current = convert_finviz_recom_to_score(finviz_data['recom'])
+                else:
+                    expert_score_current = 0
         
         # Debugging print statements
         print(f"DEBUG: use_automation: {use_automation}")
