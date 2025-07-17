@@ -1,4 +1,4 @@
-# display_components.py - Version 1.14
+# display_components.py - Version 1.15
 
 import streamlit as st
 import pandas as pd
@@ -8,7 +8,7 @@ import yfinance as yf # Ensure yfinance is imported here
 import os # For chart saving/removing, though direct plot is preferred
 
 # Import functions from utils.py
-from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points # Import calculate_pivot_points here
+from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points, EXPERT_RATING_MAP # Import EXPERT_RATING_MAP here
 
 # === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, description, ideal_value_desc, selected, signals_dict):
@@ -74,12 +74,32 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         st.metric("Overall Confidence", f"{overall_confidence:.0f}/100")
         st.progress(overall_confidence / 100)
         
-        sentiment_display = f"`{sentiment_score:.0f}`" if sentiment_score is not None else "N/A (Excluded)"
-        expert_display = f"`{expert_score:.0f}`" if expert_score is not None else "N/A (Excluded)"
+        # Convert numerical sentiment score to descriptive text
+        sentiment_text = "N/A (Excluded)"
+        if sentiment_score is not None:
+            if sentiment_score >= 75:
+                sentiment_text = "High"
+            elif sentiment_score <= 25:
+                sentiment_text = "Low"
+            else:
+                sentiment_text = "Neutral"
+
+        # Convert numerical expert score to descriptive text using EXPERT_RATING_MAP
+        expert_text = "N/A (Excluded)"
+        if expert_score is not None:
+            # Find the key in EXPERT_RATING_MAP that matches the expert_score value
+            for key, value in EXPERT_RATING_MAP.items():
+                if expert_score == value:
+                    expert_text = key
+                    break
+            # If it's 50 and not explicitly "Hold" (e.g., if it was manually set to 50 when excluded)
+            if expert_text == "N/A (Excluded)" and expert_score == 50:
+                expert_text = "Hold"
+
 
         st.markdown(f"- **Technical Score:** `{scores['technical']:.0f}` (Weight: `{final_weights['technical']*100:.0f}%`)\n"
-                    f"- **Sentiment Score:** {sentiment_display} (Weight: `{final_weights['sentiment']*100:.0f}%`)\n"
-                    f"- **Expert Rating:** {expert_display} (Weight: `{final_weights['expert']*100:.0f}%`)")
+                    f"- **Sentiment Score:** {sentiment_text} (Weight: `{final_weights['sentiment']*100:.0f}%`)\n"
+                    f"- **Expert Rating:** {expert_text} (Weight: `{final_weights['expert']*100:.0f}%`)")
         
         if show_finviz_link:
             st.markdown(f"**Source for Sentiment & Expert Scores:** [Finviz.com]({f'https://finviz.com/quote.ashx?t={ticker}'})")
