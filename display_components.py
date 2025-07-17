@@ -1,4 +1,4 @@
-# display_components.py - Version 1.22
+# display_components.py - Version 1.23
 
 import streamlit as st
 import pandas as pd
@@ -182,7 +182,8 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
     with col2:
         st.subheader("📈 Price Chart")
         mav_tuple = (21, 50, 200) if selection.get("EMA Trend") else None
-        ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])] if selection.get("Bollinger Bands") else None
+        # Changed 'None' to '[]' for addplot when Bollinger Bands are not selected
+        ap = [mpf.make_addplot(df.tail(120)[['BB_high', 'BB_low']])] if selection.get("Bollinger Bands") else []
         
         if not df.empty:
             fig, axlist = mpf.plot(
