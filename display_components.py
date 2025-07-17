@@ -1,4 +1,4 @@
-# display_components.py - Version 1.12
+# display_components.py - Version 1.13
 
 import streamlit as st
 import pandas as pd
@@ -203,6 +203,24 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
     last = df.iloc[-1]
     current_stock_price = last['Close'] # Get current stock price for moneyness calculation
 
+    # Helper to determine moneyness - MOVED TO TOP OF FUNCTION
+    def get_moneyness(strike, current_price, option_type="call"):
+        if option_type == "call":
+            if strike < current_price:
+                return "ITM"
+            elif strike > current_price:
+                return "OTM"
+            else:
+                return "ATM"
+        elif option_type == "put":
+            if strike > current_price:
+                return "ITM"
+            elif strike < current_price:
+                return "OTM"
+            else:
+                return "ATM"
+        return "N/A"
+
     st.subheader("📋 Suggested Stock Trade Plan (Bullish Swing)")
     entry_zone_start = last['EMA21'] * 0.99 if 'EMA21' in last and not pd.isna(last['EMA21']) else last['Close'] * 0.99
     entry_zone_end = last['EMA21'] * 1.01 if 'EMA21' in last and not pd.isna(last['EMA21']) else last['Close'] * 1.01
@@ -240,24 +258,6 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 st.markdown("---")
                 st.subheader("🔬 Recommended Option Deep-Dive (Spread Legs)")
                 
-                # Helper to determine moneyness
-                def get_moneyness(strike, current_price, option_type="call"):
-                    if option_type == "call":
-                        if strike < current_price:
-                            return "ITM"
-                        elif strike > current_price:
-                            return "OTM"
-                        else:
-                            return "ATM"
-                    elif option_type == "put":
-                        if strike > current_price:
-                            return "ITM"
-                        elif strike < current_price:
-                            return "OTM"
-                        else:
-                            return "ATM"
-                    return "N/A"
-
                 # Check if 'Buy' leg exists before accessing
                 if 'Buy' in trade_plan['Contracts']:
                     st.write("**Buy Leg:**")
