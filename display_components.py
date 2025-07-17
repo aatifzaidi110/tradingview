@@ -1,4 +1,4 @@
-# display_components.py - Version 1.18
+# display_components.py - Version 1.19
 
 import streamlit as st
 import pandas as pd
@@ -44,7 +44,7 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
     col1, col2 = st.columns([1, 2])
     with col1:
         # --- Ticker Price and General Info (Moved to Top) ---
-        st.subheader(f"� {info.get('longName', ticker)}")
+        st.subheader(f"📊 {info.get('longName', ticker)}")
         st.write(f"**Ticker:** {ticker}")
 
         current_price = last['Close']
@@ -83,14 +83,10 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
         # Convert numerical expert score to descriptive text using EXPERT_RATING_MAP
         expert_text = "N/A (Excluded)"
         if expert_score is not None:
-            # Find the key in EXPERT_RATING_MAP that matches the expert_score value
-            # This loop is correct, but ensure EXPERT_RATING_MAP is accessible.
-            # It's imported from utils.py, so it should be fine.
             for key, value in EXPERT_RATING_MAP.items():
                 if expert_score == value:
                     expert_text = key
                     break
-            # If it's 50 and not explicitly "Hold" (e.g., if it was manually set to 50 when excluded)
             if expert_text == "N/A (Excluded)" and expert_score == 50:
                 expert_text = "Hold"
 
@@ -376,10 +372,36 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     lambda row: get_moneyness(row['strike'], current_stock_price, "call" if option_type == "Calls" else "put"), axis=1
                 )
             
-            desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
-            available_cols = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
-            if available_cols: st.dataframe(chain_to_display_copy[available_cols].set_index('strike'))
-            else: st.info("No relevant columns found in the options chain to display.")
+            # Define column descriptions for tooltips
+            column_descriptions = {
+                'strike': 'The predetermined price at which the underlying asset can be bought (for a call) or sold (for a put) when the option is exercised.',
+                'Moneyness': 'Describes an option\'s relationship between its strike price and the underlying asset\'s current price (In-The-Money, At-The-Money, or Out-of-The-Money).',
+                'lastPrice': 'The last traded price of that specific option contract.',
+                'bid': 'The highest price a buyer is currently willing to pay for the option.',
+                'ask': 'The lowest price a seller is currently willing to accept for the option.',
+                'volume': 'The number of option contracts traded for that specific strike and expiration today. High volume indicates high trading activity and liquidity.',
+                'openInterest': 'The total number of outstanding option contracts that have not yet been closed or exercised. High open interest suggests strong market interest and good liquidity for that particular contract.',
+                'impliedVolatility': 'The market\'s expectation of how much the underlying stock\'s price will move in the future. Higher implied volatility generally means higher option premiums (prices), as there\'s a greater chance of the option moving in-the-money.',
+                'delta': 'Measures how much an option\'s price is expected to move for every $1 change in the underlying stock\'s price. Also represents the approximate probability of an option expiring in-the-money.',
+                'theta': 'Measures the rate at which an option\'s price decays over time (time decay). Theta is typically negative, meaning the option loses value as it gets closer to expiration, all else being equal.',
+                'gamma': 'Measures the rate of change of an option\'s delta. High gamma means delta will change rapidly as the stock price moves.',
+                'vega': 'Measures how much an option\'s price is expected to change for every 1% change in implied volatility. Options with higher vega are more sensitive to changes in IV.',
+                'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
+            }
+
+            # Prepare columns for display with tooltips
+            cols_to_display_with_tooltips = []
+            for col in desired_cols_to_display:
+                if col in chain_to_display_copy.columns:
+                    cols_to_display_with_tooltips.append(st.column_config.Column(
+                        col,
+                        help=column_descriptions.get(col, "No description available.")
+                    ))
+
+            if cols_to_display_with_tooltips:
+                st.dataframe(chain_to_display_copy[available_cols].set_index('strike'), column_config=cols_to_display_with_tooltips)
+            else:
+                st.info("No relevant columns found in the options chain to display.")
 
 
 def display_backtest_tab(ticker, selection):
