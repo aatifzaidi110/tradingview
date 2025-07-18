@@ -1,4 +1,4 @@
-# app.py - Version 1.14
+# app.py - Version 1.15
 # app.py
 import sys
 import os
@@ -38,10 +38,23 @@ except ImportError as e:
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
 
-# === Refresh Button ===
-if st.button("🔄 Clear Cache & Refresh Data", help="Click to clear all cached data and re-run analysis."):
-    st.cache_data.clear() # Clear all cached data
-    st.rerun() # Rerun the app
+# Initialize session state for analysis control
+if 'analysis_started' not in st.session_state:
+    st.session_state.analysis_started = False
+
+# === Buttons ===
+col_buttons1, col_buttons2 = st.columns([0.2, 0.8])
+
+with col_buttons1:
+    if st.button("▶️ Analyze Ticker", help="Click to analyze the entered ticker and display results."):
+        st.session_state.analysis_started = True
+        st.rerun() # Rerun to trigger analysis
+
+with col_buttons2:
+    if st.button("🔄 Clear Cache & Refresh Data", help="Click to clear all cached data and re-run analysis from scratch."):
+        st.cache_data.clear() # Clear all cached data
+        st.session_state.analysis_started = False # Reset analysis state
+        st.rerun() # Rerun the app
 
 # === Constants and Configuration ===
 LOG_FILE = "trade_log.csv" # Define here or pass from a config module
@@ -119,61 +132,65 @@ TIMEFRAME_MAP = {
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
 
-if ticker:
-    try:
-        hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
-        if hist_data is None or info_data is None:
-            st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
-        else:
-            # Calculate indicators once for the main display
-            is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
-            df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
-            
-            # Calculate pivot points separately for display
-            df_pivots = calculate_pivot_points(hist_data.copy()) # Use original hist_data for pivots
+# Conditional execution based on analysis_started state
+if st.session_state.analysis_started:
+    if ticker:
+        try:
+            hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
+            if hist_data is None or info_data is None:
+                st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
+            else:
+                # Calculate indicators once for the main display
+                is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
+                df_calculated = calculate_indicators(hist_data.copy(), is_intraday_data)
+                
+                # Calculate pivot points separately for display
+                df_pivots = calculate_pivot_points(hist_data.copy()) # Use original hist_data for pivots
 
-            if df_calculated.empty:
-                st.warning("No data available after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
-                st.stop()
+                if df_calculated.empty:
+                    st.warning("No data available after indicator calculations and cleaning. Please check ticker or time period.", icon="⚠️")
+                    st.stop()
 
-            # Calculate scores for display
-            last_row_for_signals = df_calculated.iloc[-1]
-            signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, is_intraday_data)
-            
-            technical_score = (sum(1 for f in signals_for_score.values() if f) / len(signals_for_score)) * 100 if signals_for_score else 0
-            
-            scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
-            
-            # Apply weights for overall confidence
-            final_weights = selected_params_main['weights'].copy()
-            if not use_automation:
-                final_weights = {'technical': 1.0, 'sentiment': 0.0, 'expert': 0.0} # Only technical counts if automation is off
-            
-            overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
+                # Calculate scores for display
+                last_row_for_signals = df_calculated.iloc[-1]
+                signals_for_score = generate_signals_for_row(last_row_for_signals, indicator_selection, df_calculated, is_intraday_data)
+                
+                technical_score = (sum(1 for f in signals_for_score.values() if f) / len(signals_for_score)) * 100 if signals_for_score else 0
+                
+                scores = {"technical": technical_score, "sentiment": sentiment_score, "expert": expert_score}
+                
+                # Apply weights for overall confidence
+                final_weights = selected_params_main['weights'].copy()
+                if not use_automation:
+                    final_weights = {'technical': 1.0, 'sentiment': 0.0, 'expert': 0.0} # Only technical counts if automation is off
+                
+                overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
 
-            # Display tabs
-            tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-            main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
+                # Display tabs
+                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
+                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
 
-            with main_tab:
-                # Pass df_pivots to main analysis tab for display
-                display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link=use_automation)
-            
-            with trade_tab:
-                display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
-            
-            with backtest_tab:
-                # Pass is_intraday=False to display_backtest_tab because backtest is always daily data
-                display_backtest_tab(ticker, indicator_selection)
-            
-            with news_tab:
-                display_news_info_tab(ticker, info_data, finviz_data)
-            
-            with log_tab:
-                display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
+                with main_tab:
+                    # Pass df_pivots to main analysis tab for display
+                    display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link=use_automation)
+                
+                with trade_tab:
+                    display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
+                
+                with backtest_tab:
+                    # Pass is_intraday=False to display_backtest_tab because backtest is always daily data
+                    display_backtest_tab(ticker, indicator_selection)
+                
+                with news_tab:
+                    display_news_info_tab(ticker, info_data, finviz_data)
+                
+                with log_tab:
+                    display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
 
-    except Exception as e:
-        st.error(f"An unexpected error occurred during data processing: {e}", icon="🚫")
-        st.exception(e)
+        except Exception as e:
+            st.error(f"An unexpected error occurred during data processing: {e}", icon="🚫")
+            st.exception(e)
+    else:
+        st.info("Please enter a stock ticker in the sidebar and click 'Analyze Ticker' to begin analysis.")
 else:
-    st.info("Please enter a stock ticker in the sidebar to begin analysis.")
+    st.info("Enter a stock ticker in the sidebar and click 'Analyze Ticker' to begin analysis.")
