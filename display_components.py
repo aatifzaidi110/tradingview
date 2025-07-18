@@ -1,4 +1,4 @@
-# display_components.py - Version 1.38
+# display_components.py - Version 1.39
 
 import streamlit as st
 import pandas as pd
@@ -14,7 +14,7 @@ from utils import backtest_strategy, calculate_indicators, generate_signals_for_
 # === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, selected, signals_dict):
     """
-    Formats and displays a single technical indicator's concise information.
+    Formats and displays a single technical indicat or's concise information.
     """
     if not selected:
         return ""
@@ -383,29 +383,29 @@ def display_main_analysis_tab(ticker, df, info, params, selection, overall_confi
                 st.markdown(format_indicator_display("Bullish PSAR", last.get('psar'), selection.get("Parabolic SAR"), signals))
 
             if selection.get("ADX"):
-                st.markdown(format_indicator_display("Strong Trend (ADX > 25)", last.get('adx'), selection.get("ADX"), signals))
+                st.markdown(format_indicator_display("Strong Trend (ADX > 25)", last.get("adx"), selection.get("ADX"), signals))
         
         with st.expander("💨 Momentum & Volume Indicators", expanded=True):
             if selection.get("RSI Momentum"):
-                st.markdown(format_indicator_display("Bullish Momentum (RSI > 50)", last.get('RSI'), selection.get("RSI Momentum"), signals))
+                st.markdown(format_indicator_display("Bullish Momentum (RSI > 50)", last.get("RSI"), selection.get("RSI Momentum"), signals))
 
             if selection.get("Stochastic"):
-                st.markdown(format_indicator_display("Bullish Stoch Cross", last.get('stoch_k'), selection.get("Stochastic"), signals))
+                st.markdown(format_indicator_display("Bullish Stoch Cross", last.get("stoch_k"), selection.get("Stochastic"), signals))
 
             if selection.get("CCI"):
-                st.markdown(format_indicator_display("Bullish CCI (>0)", last.get('cci'), selection.get("CCI"), signals))
+                st.markdown(format_indicator_display("Bullish CCI (>0)", last.get("cci"), selection.get("CCI"), signals))
 
             if selection.get("ROC"):
-                st.markdown(format_indicator_display("Positive ROC (>0)", last.get('roc'), selection.get("ROC"), signals))
+                st.markdown(format_indicator_display("Positive ROC (>0)", last.get("roc"), selection.get("ROC"), signals))
 
             if selection.get("Volume Spike"):
-                st.markdown(format_indicator_display("Volume Spike (>1.5x Avg)", last.get('Volume'), selection.get("Volume Spike"), signals))
+                st.markdown(format_indicator_display("Volume Spike (>1.5x Avg)", last.get("Volume"), selection.get("Volume Spike"), signals))
 
             if selection.get("OBV"):
-                st.markdown(format_indicator_display("OBV Rising", last.get('obv'), selection.get("OBV"), signals))
+                st.markdown(format_indicator_display("OBV Rising", last.get("obv"), selection.get("OBV"), signals))
             
             if is_intraday and selection.get("VWAP"):
-                st.markdown(format_indicator_display("Price > VWAP", last.get('vwap'), selection.get("VWAP"), signals))
+                st.markdown(format_indicator_display("Price > VWAP", last.get("vwap"), selection.get("VWAP"), signals))
         
         with st.expander("📊 Display-Only Indicators Status"):
             # Bollinger Bands Status
@@ -621,12 +621,13 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
             # --- Display Payoff Chart for Automated Strategy ---
             st.markdown("---")
             st.subheader("📊 Automated Strategy Payoff Chart")
-            payoff_fig = plot_automated_strategy_payoff(trade_plan, current_stock_price, ticker)
-            if payoff_fig: # Only display if a figure was successfully generated
-                st.pyplot(payoff_fig, clear_figure=True)
-                plt.close(payoff_fig) # Close the figure to free up memory
-            else:
-                st.info("Automated strategy payoff chart could not be generated.")
+            # Removed the call to plot_automated_strategy_payoff here
+            # payoff_fig = plot_automated_strategy_payoff(trade_plan, current_stock_price, ticker)
+            # if payoff_fig: # Only display if a figure was successfully generated
+            #     st.pyplot(payoff_fig, clear_figure=True)
+            #     plt.close(payoff_fig) # Close the figure to free up memory
+            # else:
+            #     st.info("Automated strategy payoff chart could not be generated.")
         
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])

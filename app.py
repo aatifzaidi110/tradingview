@@ -1,4 +1,4 @@
-# app.py - Version 1.17
+# app.py - Version 1.18
 # app.py
 import sys
 import os
@@ -39,30 +39,22 @@ except ImportError as e:
 st.set_page_config(page_title="Aatif's AI Trading Hub", layout="wide")
 st.title("🚀 Aatif's AI-Powered Trading Hub")
 
-# Initialize session state for analysis control
+# Initialize session state for analysis control and ticker input
 if 'analysis_started' not in st.session_state:
     st.session_state.analysis_started = False
-
-# === Buttons ===
-col_buttons1, col_buttons2 = st.columns([0.2, 0.8])
-
-with col_buttons1:
-    if st.button("▶️ Analyze Ticker", help="Click to analyze the entered ticker and display results."):
-        st.session_state.analysis_started = True
-        st.rerun() # Rerun to trigger analysis
-
-with col_buttons2:
-    if st.button("🔄 Clear Cache & Refresh Data", help="Click to clear all cached data and re-run analysis from scratch."):
-        st.cache_data.clear() # Clear all cached data
-        st.session_state.analysis_started = False # Reset analysis state
-        st.rerun() # Rerun the app
-
-# === Constants and Configuration ===
-LOG_FILE = "trade_log.csv" # Define here or pass from a config module
+if 'current_ticker_input' not in st.session_state:
+    st.session_state.current_ticker_input = "NVDA" # Default value
 
 # === SIDEBAR: Controls & Selections ===
 st.sidebar.header("⚙️ Controls")
-ticker = st.sidebar.text_input("Enter a Ticker Symbol", value="NVDA").upper()
+# Use st.session_state to manage the ticker input value
+new_ticker_input = st.sidebar.text_input("Enter a Ticker Symbol", value=st.session_state.current_ticker_input).upper()
+
+# Update session state only if the input value has changed
+if new_ticker_input != st.session_state.current_ticker_input:
+    st.session_state.current_ticker_input = new_ticker_input
+    # No rerun here, let the button click handle it
+
 timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
@@ -94,6 +86,25 @@ use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help=
 auto_sentiment_score_placeholder = st.sidebar.empty()
 auto_expert_score_placeholder = st.sidebar.empty()
 
+# === Buttons ===
+col_buttons1, col_buttons2 = st.columns([0.2, 0.8])
+
+with col_buttons1:
+    # When "Analyze Ticker" is clicked, set analysis_started to True and rerun
+    if st.button("▶️ Analyze Ticker", help="Click to analyze the entered ticker and display results."):
+        st.session_state.analysis_started = True
+        st.rerun()
+
+with col_buttons2:
+    # When "Clear Cache & Refresh Data" is clicked, clear cache, reset analysis_started, and rerun
+    if st.button("🔄 Clear Cache & Refresh Data", help="Click to clear all cached data and re-run analysis from scratch."):
+        st.cache_data.clear() # Clear all cached data
+        st.session_state.analysis_started = False # Reset analysis state
+        st.rerun()
+
+# === Constants and Configuration ===
+LOG_FILE = "trade_log.csv" # Define here or pass from a config module
+
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
     "Scalp Trading": {"period": "5d", "interval": "5m", "weights": {"technical": 0.9, "sentiment": 0.1, "expert": 0.0}},
@@ -103,20 +114,23 @@ TIMEFRAME_MAP = {
 }
 selected_params_main = TIMEFRAME_MAP[timeframe]
 
-# Conditional execution based on analysis_started state
+# Only run analysis if the button has been clicked
 if st.session_state.analysis_started:
-    if ticker:
-        st.write(f"Analyzing ticker: {ticker}") # Debug print to confirm the ticker being processed
+    # Use the ticker from session state, which is updated by text_input
+    ticker_to_analyze = st.session_state.current_ticker_input
+
+    if ticker_to_analyze:
+        st.write(f"Analyzing ticker: {ticker_to_analyze}") # Debug print to confirm the ticker being processed
         try:
-            # --- Dynamic Qualitative Score Calculation (moved inside analysis block) ---
+            # --- Dynamic Qualitative Score Calculation ---
             sentiment_score = 50
             expert_score = 50
             finviz_data = {"headlines": ["Automation is disabled."]}
 
             if use_automation:
-                finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
+                # Ensure finviz_data is fetched for the current ticker_to_analyze
+                finviz_data = get_finviz_data(ticker_to_analyze)
                 
-                # Check for 'error' key in finviz_data to handle rate limiting gracefully
                 if 'error' in finviz_data and "429 Client Error" in finviz_data['error']:
                     st.warning("Finviz data could not be fetched due to rate limiting (Too Many Requests). Using default/manual scores for Sentiment and Expert Rating.", icon="⚠️")
                     auto_sentiment_score = 50 # Default to neutral
@@ -138,9 +152,9 @@ if st.session_state.analysis_started:
                 expert_score = st.sidebar.slider("Manual Expert Score", 1, 100, 50)
             # --- End Dynamic Qualitative Score Calculation ---
 
-            hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
+            hist_data, info_data = get_data(ticker_to_analyze, selected_params_main['period'], selected_params_main['interval'])
             if hist_data is None or info_data is None:
-                st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
+                st.error(f"Could not fetch data for {ticker_to_analyze} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
             else:
                 # Calculate indicators once for the main display
                 is_intraday_data = selected_params_main['interval'] in ['5m', '60m']
@@ -174,23 +188,23 @@ if st.session_state.analysis_started:
 
                 with main_tab:
                     # Pass df_pivots to main analysis tab for display
-                    display_main_analysis_tab(ticker, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link=use_automation)
+                    display_main_analysis_tab(ticker_to_analyze, df_calculated, info_data, selected_params_main, indicator_selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link=use_automation)
                 
                 with trade_tab:
-                    display_trade_plan_options_tab(ticker, df_calculated, overall_confidence)
+                    display_trade_plan_options_tab(ticker_to_analyze, df_calculated, overall_confidence)
                 
                 with backtest_tab:
                     # Pass is_intraday=False to display_backtest_tab because backtest is always daily data
-                    display_backtest_tab(ticker, indicator_selection)
+                    display_backtest_tab(ticker_to_analyze, indicator_selection)
                 
                 with news_tab:
-                    display_news_info_tab(ticker, info_data, finviz_data)
+                    display_news_info_tab(ticker_to_analyze, info_data, finviz_data)
                 
                 with log_tab:
-                    display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence)
+                    display_trade_log_tab(LOG_FILE, ticker_to_analyze, timeframe, overall_confidence)
 
         except Exception as e:
-            st.error(f"An unexpected error occurred during data processing: {e}", icon="🚫")
+            st.error(f"An unexpected error occurred during data processing for {ticker_to_analyze}: {e}", icon="🚫")
             st.exception(e)
     else:
         st.info("Please enter a stock ticker in the sidebar and click 'Analyze Ticker' to begin analysis.")
