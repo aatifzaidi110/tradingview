@@ -1,4 +1,4 @@
-# display_components.py - Version 1.34
+# display_components.py - Version 1.35
 
 import streamlit as st
 import pandas as pd
@@ -6,6 +6,7 @@ import mplfinance as mpf
 import matplotlib.pyplot as plt
 import yfinance as yf # Ensure yfinance is imported here
 import os # For chart saving/removing, though direct plot is preferred
+import numpy as np # For numerical operations in payoff chart
 
 # Import functions from utils.py
 from utils import backtest_strategy, calculate_indicators, generate_signals_for_row, generate_option_trade_plan, get_options_chain, get_data, get_finviz_data, calculate_pivot_points, EXPERT_RATING_MAP, get_moneyness, analyze_options_chain # Import get_moneyness and analyze_options_chain
@@ -33,6 +34,90 @@ def format_indicator_display(signal_key, current_value, selected, signals_dict):
 
     return f"{status_icon} **{display_name}** ({value_str})"
 
+
+# === Option Payoff Chart Function ===
+def plot_payoff_chart(strategy_details, current_stock_price, ticker):
+    """
+    Generates and displays an option payoff chart for the given strategy.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axhline(0, color='gray', linestyle='--', linewidth=0.8, label='Breakeven Line') # Breakeven line
+
+    strategy_type = strategy_details['Strategy']
+    
+    # Determine the range of stock prices for the chart
+    # Use current stock price and relevant strikes to set a good range
+    min_price = current_stock_price * 0.8
+    max_price = current_stock_price * 1.2
+
+    if strategy_type == "Bull Call Spread":
+        buy_strike = strategy_details['Contracts']['Buy']['strike']
+        sell_strike = strategy_details['Contracts']['Sell']['strike']
+        net_debit = float(strategy_details['Net Debit'].replace('~$', '')) # Convert string to float
+
+        min_price = min(buy_strike, sell_strike, current_stock_price) * 0.9
+        max_price = max(buy_strike, sell_strike, current_stock_price) * 1.1
+
+        stock_prices = np.linspace(min_price, max_price, 200)
+        
+        # Calculate payoff for Bull Call Spread
+        payoff = np.maximum(0, stock_prices - buy_strike) - np.maximum(0, stock_prices - sell_strike) - net_debit
+        
+        ax.plot(stock_prices, payoff, label=f'{strategy_type} Payoff', color='blue')
+        
+        # Mark key points
+        ax.axvline(buy_strike, color='green', linestyle=':', label=f'Buy Strike: ${buy_strike:.2f}')
+        ax.axvline(sell_strike, color='red', linestyle=':', label=f'Sell Strike: ${sell_strike:.2f}')
+        
+        breakeven = buy_strike + net_debit
+        ax.axvline(breakeven, color='purple', linestyle='--', label=f'Breakeven: ${breakeven:.2f}')
+        
+        max_profit = (sell_strike - buy_strike) - net_debit
+        max_loss = -net_debit
+        
+        ax.text(stock_prices[-1], max_profit, f'Max Profit: ${max_profit:.2f}', verticalalignment='bottom', horizontalalignment='right', color='green', fontsize=9)
+        ax.text(stock_prices[-1], max_loss, f'Max Loss: ${max_loss:.2f}', verticalalignment='top', horizontalalignment='right', color='red', fontsize=9)
+
+    elif strategy_type in ["Buy ITM Call", "Buy ATM Call"]:
+        strike = float(strategy_details['Strike'].replace('$', ''))
+        entry_premium = float(strategy_details['Entry Price'].replace('~$', ''))
+        
+        min_price = min(strike, current_stock_price) * 0.9
+        max_price = max(strike, current_stock_price) * 1.1 + entry_premium * 2 # Extend range for unlimited profit
+        
+        stock_prices = np.linspace(min_price, max_price, 200)
+        
+        # Calculate payoff for Buy Call
+        payoff = np.maximum(0, stock_prices - strike) - entry_premium
+        
+        ax.plot(stock_prices, payoff, label=f'{strategy_type} Payoff', color='blue')
+        
+        # Mark key points
+        ax.axvline(strike, color='green', linestyle=':', label=f'Strike: ${strike:.2f}')
+        
+        breakeven = strike + entry_premium
+        ax.axvline(breakeven, color='purple', linestyle='--', label=f'Breakeven: ${breakeven:.2f}')
+        
+        max_loss = -entry_premium
+        
+        ax.text(stock_prices[-1], payoff[-1], 'Max Profit: Unlimited', verticalalignment='bottom', horizontalalignment='right', color='green', fontsize=9)
+        ax.text(stock_prices[-1], max_loss, f'Max Loss: ${max_loss:.2f}', verticalalignment='top', horizontalalignment='right', color='red', fontsize=9)
+
+    else:
+        ax.text(0.5, 0.5, "Payoff chart not available for this strategy.", transform=ax.transAxes,
+                horizontalalignment='center', verticalalignment='center', fontsize=12, color='gray')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_frame_on(False)
+        return fig # Return early if no chart can be drawn
+
+    ax.set_title(f'{ticker} {strategy_type} Payoff Chart')
+    ax.set_xlabel('Stock Price at Expiration ($)')
+    ax.set_ylabel('Profit/Loss ($)')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.6)
+    fig.tight_layout()
+    return fig
 
 # === Dashboard Tab Display Functions ===
 def display_main_analysis_tab(ticker, df, info, params, selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link):
@@ -327,6 +412,13 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     st.table(pd.DataFrame(option_metrics_sell).set_index("Metric"))
                 else:
                     st.warning("Sell leg details not available for the Bull Call Spread.")
+            
+            # --- Display Payoff Chart ---
+            st.markdown("---")
+            st.subheader("📊 Option Payoff Chart")
+            payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
+            st.pyplot(payoff_fig, clear_figure=True)
+            plt.close(payoff_fig) # Close the figure to free up memory
 
             else: # Single Call strategy (Buy ITM Call or Buy ATM Call)
                 rec_option = trade_plan['Contract']
@@ -352,6 +444,14 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                         {"Metric": "Volume (Today)", "Value": f"{rec_option.get('volume', None):,}" if rec_option.get('volume') is not None and not pd.isna(rec_option.get('volume')) else "N/A", "Description": "Number of contracts traded today.", "Ideal for Buyers": "Higher (>100)"},
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
+
+                # --- Display Payoff Chart ---
+                st.markdown("---")
+                st.subheader("📊 Option Payoff Chart")
+                payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
+                st.pyplot(payoff_fig, clear_figure=True)
+                plt.close(payoff_fig) # Close the figure to free up memory
+
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
         
@@ -402,7 +502,7 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 'impliedVolatility': 'The market\'s expectation of how much the underlying stock\'s price will move in the future. Higher implied volatility generally means higher option premiums (prices), as there\'s a greater chance of the option moving in-the-money.',
                 'delta': 'Measures how much an option\'s price is expected to move for every $1 change in the underlying stock\'s price. Also represents the approximate probability of an option expiring in-the-money.',
                 'theta': 'Measures the rate at which an option\'s price decays over time (time decay). Theta is typically negative, meaning the option loses value as it gets closer to expiration, all else being equal.',
-                'gamma': 'Measures the rate of change of an option\'s delta. High gamma means delta will change rapidly as the stock price moves.',
+                'gamma': 'Measures the rate of change of an option\'s delta. High gamma = faster delta changes.',
                 'vega': 'Measures how much an option\'s price is expected to change for every 1% change in implied volatility. Options with higher vega are more sensitive to changes in IV.',
                 'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
             }
