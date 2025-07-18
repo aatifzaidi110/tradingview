@@ -1,4 +1,4 @@
-# display_components.py - Version 1.35
+# display_components.py - Version 1.36
 
 import streamlit as st
 import pandas as pd
@@ -53,7 +53,9 @@ def plot_payoff_chart(strategy_details, current_stock_price, ticker):
     if strategy_type == "Bull Call Spread":
         buy_strike = strategy_details['Contracts']['Buy']['strike']
         sell_strike = strategy_details['Contracts']['Sell']['strike']
-        net_debit = float(strategy_details['Net Debit'].replace('~$', '')) # Convert string to float
+        # Safely convert net_debit string to float
+        net_debit_str = strategy_details['Net Debit'].replace('~', '').replace('$', '')
+        net_debit = float(net_debit_str) if net_debit_str else 0.0
 
         min_price = min(buy_strike, sell_strike, current_stock_price) * 0.9
         max_price = max(buy_strike, sell_strike, current_stock_price) * 1.1
@@ -80,7 +82,9 @@ def plot_payoff_chart(strategy_details, current_stock_price, ticker):
 
     elif strategy_type in ["Buy ITM Call", "Buy ATM Call"]:
         strike = float(strategy_details['Strike'].replace('$', ''))
-        entry_premium = float(strategy_details['Entry Price'].replace('~$', ''))
+        # Safely convert entry_price string to float
+        entry_premium_str = strategy_details['Entry Price'].replace('~', '').replace('$', '')
+        entry_premium = float(entry_premium_str) if entry_premium_str else 0.0
         
         min_price = min(strike, current_stock_price) * 0.9
         max_price = max(strike, current_stock_price) * 1.1 + entry_premium * 2 # Extend range for unlimited profit
@@ -109,7 +113,8 @@ def plot_payoff_chart(strategy_details, current_stock_price, ticker):
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_frame_on(False)
-        return fig # Return early if no chart can be drawn
+        plt.close(fig) # Close the figure if no chart is drawn to prevent memory leaks
+        return None # Return None if no chart is generated
 
     ax.set_title(f'{ticker} {strategy_type} Payoff Chart')
     ax.set_xlabel('Stock Price at Expiration ($)')
@@ -412,15 +417,8 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     st.table(pd.DataFrame(option_metrics_sell).set_index("Metric"))
                 else:
                     st.warning("Sell leg details not available for the Bull Call Spread.")
-            
-            # --- Display Payoff Chart ---
-            st.markdown("---")
-            st.subheader("📊 Option Payoff Chart")
-            payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
-            st.pyplot(payoff_fig, clear_figure=True)
-            plt.close(payoff_fig) # Close the figure to free up memory
 
-            else: # Single Call strategy (Buy ITM Call or Buy ATM Call)
+            elif trade_plan['Strategy'] in ["Buy ITM Call", "Buy ATM Call"]: # Corrected: use elif here
                 rec_option = trade_plan['Contract']
                 entry_premium = rec_option.get('ask', rec_option.get('lastPrice', 0))
                 moneyness = get_moneyness(rec_option.get('strike'), current_stock_price, "call")
@@ -445,13 +443,16 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
 
-                # --- Display Payoff Chart ---
-                st.markdown("---")
-                st.subheader("📊 Option Payoff Chart")
-                payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
+            # --- Display Payoff Chart (Moved outside the inner if/elif, applies to both successful strategies) ---
+            st.markdown("---")
+            st.subheader("📊 Option Payoff Chart")
+            payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
+            if payoff_fig: # Only display if a figure was successfully generated
                 st.pyplot(payoff_fig, clear_figure=True)
                 plt.close(payoff_fig) # Close the figure to free up memory
-
+            else:
+                st.info("Payoff chart could not be generated for the recommended strategy.")
+        
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
         
