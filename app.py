@@ -1,4 +1,4 @@
-# app.py - Version 1.15
+# app.py - Version 1.17
 # app.py
 import sys
 import os
@@ -28,7 +28,8 @@ from utils import (
 try:
     from display_components import (
         display_main_analysis_tab, display_trade_plan_options_tab,
-        display_backtest_tab, display_news_info_tab, display_trade_log_tab
+        display_backtest_tab, display_news_info_tab, display_trade_log_tab,
+        display_interactive_payoff_calculator # Import the new interactive payoff calculator
     )
 except ImportError as e:
     print("Import error details:", str(e))
@@ -93,36 +94,6 @@ use_automation = st.sidebar.toggle("Enable Automated Scoring", value=True, help=
 auto_sentiment_score_placeholder = st.sidebar.empty()
 auto_expert_score_placeholder = st.sidebar.empty()
 
-# === Dynamic Qualitative Score Calculation ===
-sentiment_score = 50
-expert_score = 50
-finviz_data = {"headlines": ["Automation is disabled."]}
-
-if use_automation:
-    finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
-    
-    # Check for 'error' key in finviz_data to handle rate limiting gracefully
-    if 'error' in finviz_data and "429 Client Error" in finviz_data['error']:
-        st.warning("Finviz data could not be fetched due to rate limiting (Too Many Requests). Using default/manual scores for Sentiment and Expert Rating.", icon="⚠️")
-        auto_sentiment_score = 50 # Default to neutral
-        auto_expert_score = 50 # Default to hold
-        finviz_recom_display = "N/A (Rate Limited)"
-    else:
-        auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
-        auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
-        finviz_recom_display = finviz_data['recom']
-
-    auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
-    auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_recom_display})")
-    
-    sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
-    expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
-else:
-    st.sidebar.info("Automation OFF. Manual scores are used for display, but only technical score contributes to confidence.")
-    sentiment_score = st.sidebar.slider("Manual Sentiment Score", 1, 100, 50)
-    expert_score = st.sidebar.slider("Manual Expert Score", 1, 100, 50)
-
-
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
     "Scalp Trading": {"period": "5d", "interval": "5m", "weights": {"technical": 0.9, "sentiment": 0.1, "expert": 0.0}},
@@ -135,7 +106,38 @@ selected_params_main = TIMEFRAME_MAP[timeframe]
 # Conditional execution based on analysis_started state
 if st.session_state.analysis_started:
     if ticker:
+        st.write(f"Analyzing ticker: {ticker}") # Debug print to confirm the ticker being processed
         try:
+            # --- Dynamic Qualitative Score Calculation (moved inside analysis block) ---
+            sentiment_score = 50
+            expert_score = 50
+            finviz_data = {"headlines": ["Automation is disabled."]}
+
+            if use_automation:
+                finviz_data = get_finviz_data(ticker) # This calls utils.get_finviz_data
+                
+                # Check for 'error' key in finviz_data to handle rate limiting gracefully
+                if 'error' in finviz_data and "429 Client Error" in finviz_data['error']:
+                    st.warning("Finviz data could not be fetched due to rate limiting (Too Many Requests). Using default/manual scores for Sentiment and Expert Rating.", icon="⚠️")
+                    auto_sentiment_score = 50 # Default to neutral
+                    auto_expert_score = 50 # Default to hold
+                    finviz_recom_display = "N/A (Rate Limited)"
+                else:
+                    auto_sentiment_score = convert_compound_to_100_scale(finviz_data['sentiment_compound'])
+                    auto_expert_score = EXPERT_RATING_MAP.get(finviz_data['recom'], 50)
+                    finviz_recom_display = finviz_data['recom']
+
+                auto_sentiment_score_placeholder.markdown(f"**Automated Sentiment:** `{auto_sentiment_score}`")
+                auto_expert_score_placeholder.markdown(f"**Automated Expert Rating:** `{auto_expert_score}` ({finviz_recom_display})")
+                
+                sentiment_score = st.sidebar.slider("Adjust Final Sentiment Score", 1, 100, auto_sentiment_score)
+                expert_score = st.sidebar.slider("Adjust Final Expert Score", 1, 100, auto_expert_score)
+            else:
+                st.sidebar.info("Automation OFF. Manual scores are used for display, but only technical score contributes to confidence.")
+                sentiment_score = st.sidebar.slider("Manual Sentiment Score", 1, 100, 50)
+                expert_score = st.sidebar.slider("Manual Expert Score", 1, 100, 50)
+            # --- End Dynamic Qualitative Score Calculation ---
+
             hist_data, info_data = get_data(ticker, selected_params_main['period'], selected_params_main['interval'])
             if hist_data is None or info_data is None:
                 st.error(f"Could not fetch data for {ticker} on a {selected_params_main['interval']} interval. Please check the ticker symbol or try again later.")
