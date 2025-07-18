@@ -1,4 +1,4 @@
-# display_components.py - Version 1.36
+# display_components.py - Version 1.37
 
 import streamlit as st
 import pandas as pd
@@ -35,10 +35,94 @@ def format_indicator_display(signal_key, current_value, selected, signals_dict):
     return f"{status_icon} **{display_name}** ({value_str})"
 
 
-# === Option Payoff Chart Function ===
-def plot_payoff_chart(strategy_details, current_stock_price, ticker):
+# === Option Payoff Chart Functions ===
+
+def calculate_payoff_from_legs(stock_prices, legs):
     """
-    Generates and displays an option payoff chart for the given strategy.
+    Calculates the total payoff for a given set of option legs across a range of stock prices.
+    Each leg is expected to be a dictionary: {'type': 'call'/'put', 'strike': float, 'premium': float, 'action': 'buy'/'sell'}
+    """
+    total_payoff = np.zeros_like(stock_prices, dtype=float) # Ensure float type
+
+    for leg in legs:
+        option_type = leg['type']
+        strike = leg['strike']
+        premium = leg['premium']
+        action = leg['action']
+
+        if option_type == 'call':
+            payoff_per_share = np.maximum(0, stock_prices - strike)
+        elif option_type == 'put':
+            payoff_per_share = np.maximum(0, strike - stock_prices)
+        else:
+            # This case should ideally be prevented by input validation
+            continue
+
+        if action == 'buy':
+            total_payoff += (payoff_per_share - premium)
+        elif action == 'sell':
+            total_payoff += (premium - payoff_per_share)
+    return total_payoff
+
+def plot_generic_payoff_chart(stock_prices, payoffs, legs, strategy_name, ticker, current_stock_price):
+    """
+    Generates and displays an option payoff chart for a generic strategy
+    based on calculated payoffs and individual legs.
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.axhline(0, color='gray', linestyle='--', linewidth=0.8, label='Breakeven Line') # Breakeven line
+
+    ax.plot(stock_prices, payoffs, label=f'{strategy_name} Payoff', color='blue')
+
+    # Mark strikes
+    for leg in legs:
+        color = 'green' if leg['action'] == 'buy' else 'red'
+        linestyle = ':'
+        ax.axvline(leg['strike'], color=color, linestyle=linestyle, label=f"{leg['action'].capitalize()} {leg['type'].capitalize()} Strike: ${leg['strike']:.2f}")
+
+    # Mark current stock price
+    ax.axvline(current_stock_price, color='orange', linestyle='-', linewidth=1.5, label=f'Current Price: ${current_stock_price:.2f}')
+
+    # Find breakeven points (where payoff crosses zero)
+    breakeven_points = []
+    # Check for sign changes in payoff
+    for i in range(1, len(payoffs)):
+        if (payoffs[i-1] < 0 and payoffs[i] >= 0) or (payoffs[i-1] > 0 and payoffs[i] <= 0):
+            # Linear interpolation for a more precise breakeven point
+            x1, y1 = stock_prices[i-1], payoffs[i-1]
+            x2, y2 = stock_prices[i], payoffs[i]
+            if (y2 - y1) != 0: # Avoid division by zero
+                breakeven = x1 - y1 * (x2 - x1) / (y2 - y1)
+                breakeven_points.append(breakeven)
+    
+    # Filter unique breakeven points and plot them
+    unique_breakeven_points = sorted(list(set(round(bp, 2) for bp in breakeven_points)))
+    for bp in unique_breakeven_points:
+        ax.axvline(bp, color='purple', linestyle='--', label=f'Breakeven: ${bp:.2f}')
+
+    # Calculate and mark max profit/loss from the payoff array
+    max_payoff = np.max(payoffs)
+    min_payoff = np.min(payoffs)
+    
+    # Add text annotations for max profit/loss
+    # Adjust position slightly to avoid overlap with plot line
+    if max_payoff > 0:
+        ax.text(stock_prices[-1], max_payoff * 0.9, f'Max Profit: ${max_payoff:.2f}', verticalalignment='bottom', horizontalalignment='right', color='green', fontsize=9)
+    if min_payoff < 0:
+        ax.text(stock_prices[-1], min_payoff * 1.1, f'Max Loss: ${min_payoff:.2f}', verticalalignment='top', horizontalalignment='right', color='red', fontsize=9)
+
+
+    ax.set_title(f'{ticker} {strategy_name} Payoff Chart')
+    ax.set_xlabel('Stock Price at Expiration ($)')
+    ax.set_ylabel('Profit/Loss ($)')
+    ax.legend()
+    ax.grid(True, linestyle='--', alpha=0.6)
+    fig.tight_layout()
+    return fig
+
+def plot_automated_strategy_payoff(strategy_details, current_stock_price, ticker):
+    """
+    Generates and displays an option payoff chart for the automated recommended strategy.
     """
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.axhline(0, color='gray', linestyle='--', linewidth=0.8, label='Breakeven Line') # Breakeven line
@@ -123,6 +207,97 @@ def plot_payoff_chart(strategy_details, current_stock_price, ticker):
     ax.grid(True, linestyle='--', alpha=0.6)
     fig.tight_layout()
     return fig
+
+def display_interactive_payoff_calculator(current_stock_price, ticker):
+    """
+    Displays an interactive Streamlit module for calculating and plotting option payoff charts.
+    """
+    st.subheader("🧮 Interactive Payoff Calculator")
+    st.info("Build and visualize your own options strategies.")
+
+    strategy_options = {
+        "Long Call": "Buy a call option. Bullish, unlimited profit, defined risk.",
+        "Long Put": "Buy a put option. Bearish, unlimited profit, defined risk.",
+        "Bull Call Spread": "Buy ITM call, Sell OTM call. Bullish, defined risk/reward.",
+        "Bear Put Spread": "Buy OTM put, Sell ITM put. Bearish, defined risk/reward."
+    }
+    
+    selected_strategy = st.selectbox("Select Strategy", list(strategy_options.keys()), key="payoff_strategy_select")
+    st.markdown(f"*{strategy_options[selected_strategy]}*")
+
+    legs = []
+    
+    # Default range for stock prices on the chart
+    stock_prices_for_chart = np.linspace(current_stock_price * 0.7, current_stock_price * 1.3, 200)
+
+    if selected_strategy == "Long Call":
+        col1, col2 = st.columns(2)
+        with col1:
+            strike = st.number_input("Call Strike Price", min_value=0.01, value=round(current_stock_price * 1.05, 2), format="%.2f", key="lc_strike")
+        with col2:
+            premium = st.number_input("Call Premium Paid", min_value=0.01, value=2.00, format="%.2f", key="lc_premium")
+        legs.append({'type': 'call', 'strike': strike, 'premium': premium, 'action': 'buy'})
+        
+        # Adjust chart range based on inputs
+        stock_prices_for_chart = np.linspace(min(strike, current_stock_price) * 0.9, max(strike, current_stock_price) * 1.1 + premium * 2, 200)
+
+    elif selected_strategy == "Long Put":
+        col1, col2 = st.columns(2)
+        with col1:
+            strike = st.number_input("Put Strike Price", min_value=0.01, value=round(current_stock_price * 0.95, 2), format="%.2f", key="lp_strike")
+        with col2:
+            premium = st.number_input("Put Premium Paid", min_value=0.01, value=2.00, format="%.2f", key="lp_premium")
+        legs.append({'type': 'put', 'strike': strike, 'premium': premium, 'action': 'buy'})
+
+        # Adjust chart range based on inputs
+        stock_prices_for_chart = np.linspace(min(strike, current_stock_price) * 0.9 - premium * 2, max(strike, current_stock_price) * 1.1, 200)
+
+    elif selected_strategy == "Bull Call Spread":
+        col1, col2 = st.columns(2)
+        with col1:
+            buy_strike = st.number_input("Buy Call Strike", min_value=0.01, value=round(current_stock_price * 0.95, 2), format="%.2f", key="bcs_buy_strike")
+            buy_premium = st.number_input("Buy Call Premium", min_value=0.01, value=3.00, format="%.2f", key="bcs_buy_premium")
+        with col2:
+            sell_strike = st.number_input("Sell Call Strike", min_value=0.01, value=round(current_stock_price * 1.05, 2), format="%.2f", key="bcs_sell_strike")
+            sell_premium = st.number_input("Sell Call Premium", min_value=0.01, value=1.00, format="%.2f", key="bcs_sell_premium")
+        
+        if sell_strike <= buy_strike:
+            st.warning("Sell Call Strike must be strictly greater than Buy Call Strike for a Bull Call Spread.")
+        else:
+            legs.append({'type': 'call', 'strike': buy_strike, 'premium': buy_premium, 'action': 'buy'})
+            legs.append({'type': 'call', 'strike': sell_strike, 'premium': sell_premium, 'action': 'sell'})
+            
+            stock_prices_for_chart = np.linspace(min(buy_strike, sell_strike, current_stock_price) * 0.9, max(buy_strike, sell_strike, current_stock_price) * 1.1, 200)
+
+    elif selected_strategy == "Bear Put Spread":
+        col1, col2 = st.columns(2)
+        with col1:
+            buy_strike = st.number_input("Buy Put Strike", min_value=0.01, value=round(current_stock_price * 1.05, 2), format="%.2f", key="bps_buy_strike")
+            buy_premium = st.number_input("Buy Put Premium", min_value=0.01, value=3.00, format="%.2f", key="bps_buy_premium")
+        with col2:
+            sell_strike = st.number_input("Sell Put Strike", min_value=0.01, value=round(current_stock_price * 0.95, 2), format="%.2f", key="bps_sell_strike")
+            sell_premium = st.number_input("Sell Put Premium", min_value=0.01, value=1.00, format="%.2f", key="bps_sell_premium")
+        
+        if sell_strike >= buy_strike:
+            st.warning("Sell Put Strike must be strictly less than Buy Put Strike for a Bear Put Spread.")
+        else:
+            legs.append({'type': 'put', 'strike': buy_strike, 'premium': buy_premium, 'action': 'buy'})
+            legs.append({'type': 'put', 'strike': sell_strike, 'premium': sell_premium, 'action': 'sell'})
+
+            stock_prices_for_chart = np.linspace(min(buy_strike, sell_strike, current_stock_price) * 0.9, max(buy_strike, sell_strike, current_stock_price) * 1.1, 200)
+
+    st.markdown("---")
+    if legs:
+        payoffs = calculate_payoff_from_legs(stock_prices_for_chart, legs)
+        payoff_fig = plot_generic_payoff_chart(stock_prices_for_chart, payoffs, legs, selected_strategy, ticker, current_stock_price)
+        if payoff_fig:
+            st.pyplot(payoff_fig, clear_figure=True)
+            plt.close(payoff_fig)
+        else:
+            st.info("Payoff chart could not be generated with the provided inputs. Please check your strike and premium values.")
+    else:
+        st.info("Please configure the options legs using the inputs above to see the payoff chart.")
+
 
 # === Dashboard Tab Display Functions ===
 def display_main_analysis_tab(ticker, df, info, params, selection, overall_confidence, scores, final_weights, sentiment_score, expert_score, df_pivots, show_finviz_link):
@@ -443,15 +618,15 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
 
-            # --- Display Payoff Chart (Moved outside the inner if/elif, applies to both successful strategies) ---
+            # --- Display Payoff Chart for Automated Strategy ---
             st.markdown("---")
-            st.subheader("📊 Option Payoff Chart")
-            payoff_fig = plot_payoff_chart(trade_plan, current_stock_price, ticker)
+            st.subheader("📊 Automated Strategy Payoff Chart")
+            payoff_fig = plot_automated_strategy_payoff(trade_plan, current_stock_price, ticker)
             if payoff_fig: # Only display if a figure was successfully generated
                 st.pyplot(payoff_fig, clear_figure=True)
                 plt.close(payoff_fig) # Close the figure to free up memory
             else:
-                st.info("Payoff chart could not be generated for the recommended strategy.")
+                st.info("Automated strategy payoff chart could not be generated.")
         
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
@@ -530,6 +705,10 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                 )
             else:
                 st.info("No relevant columns found in the options chain to display.")
+    
+    st.markdown("---")
+    # Call the interactive payoff calculator
+    display_interactive_payoff_calculator(current_stock_price, ticker)
 
 
 def display_backtest_tab(ticker, selection):
