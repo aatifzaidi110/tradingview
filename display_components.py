@@ -618,6 +618,11 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
 
+             # --- Add the Options Profit Calculator link here ---
+            st.markdown("---")
+            st.markdown("🔗 **External Tool:** [Options Profit Calculator](https://www.optionsprofitcalculator.com/)")
+            # --- End of added link ---
+
             # --- Display Payoff Chart for Automated Strategy ---
             st.markdown("---")
             st.subheader("📊 Automated Strategy Payoff Chart")
