@@ -1,4 +1,4 @@
-# app.py - Version 1.19
+# app.py - Version 1.21
 # app.py
 import sys
 import os
@@ -35,7 +35,7 @@ try:
     from display_components import (
         display_main_analysis_tab, display_trade_plan_options_tab,
         display_backtest_tab, display_news_info_tab, display_trade_log_tab,
-        display_interactive_payoff_calculator # Import the new interactive payoff calculator
+        display_option_calculator_tab # Import the new options calculator tab
     )
 except ImportError as e:
     print("Import error details:", str(e))
@@ -185,9 +185,13 @@ if st.session_state.analysis_started:
                 
                 overall_confidence = min(round((final_weights["technical"]*scores["technical"] + final_weights["sentiment"]*scores["sentiment"] + final_weights["expert"]*scores["expert"]), 2), 100)
 
+                # Get expirations for the new option calculator tab
+                stock_obj_for_options = yf.Ticker(ticker_to_analyze)
+                expirations = stock_obj_for_options.options
+
                 # Display tabs
-                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log"]
-                main_tab, trade_tab, backtest_tab, news_tab, log_tab = st.tabs(tab_list)
+                tab_list = ["📊 Main Analysis", "📈 Trade Plan & Options", "🧪 Backtest", "📰 News & Info", "📝 Trade Log", "🧮 Option Calculator"]
+                main_tab, trade_tab, backtest_tab, news_tab, log_tab, option_calc_tab = st.tabs(tab_list)
 
                 with main_tab:
                     # Pass df_pivots to main analysis tab for display
@@ -206,10 +210,17 @@ if st.session_state.analysis_started:
                 with log_tab:
                     display_trade_log_tab(LOG_FILE, ticker_to_analyze, timeframe, overall_confidence)
 
+                with option_calc_tab:
+                    # Pass the current stock price and expirations to the new calculator
+                    current_stock_price = df_calculated.iloc[-1]['Close']
+                    display_option_calculator_tab(ticker_to_analyze, current_stock_price, expirations)
+
+
         except Exception as e:
-            st.error(f"An unexpected error occurred during data processing for {ticker_to_analyze}: {e}", icon="🚫")
+            st.error(f"An unexpected error occurred during data processing for {ticker_to_analyze}: {e}", icon="�")
             st.exception(e)
     else:
         st.info("Please enter a stock ticker in the sidebar and click 'Analyze Ticker' to begin analysis.")
 else:
     st.info("Enter a stock ticker in the sidebar and click 'Analyze Ticker' to begin analysis.")
+�
