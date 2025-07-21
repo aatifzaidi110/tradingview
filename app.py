@@ -1,4 +1,4 @@
-# app.py - Version 1.18
+# app.py - Version 1.19
 # app.py
 import sys
 import os
@@ -17,6 +17,10 @@ print("=================")
 
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# === Constants and Configuration ===
+# Moved LOG_FILE definition to the top to ensure it's always defined
+LOG_FILE = "trade_log.csv" 
 
 # Import functions from modules
 from utils import (
@@ -101,9 +105,6 @@ with col_buttons2:
         st.cache_data.clear() # Clear all cached data
         st.session_state.analysis_started = False # Reset analysis state
         st.rerun()
-
-# === Constants and Configuration ===
-LOG_FILE = "trade_log.csv" # Define here or pass from a config module
 
 # === Main Script Execution ===
 TIMEFRAME_MAP = {
