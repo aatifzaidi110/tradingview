@@ -21,6 +21,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # === Constants and Configuration ===
 # Moved LOG_FILE definition to the top to ensure it's always defined
 LOG_FILE = "trade_log.csv" 
+# Debugging: Confirm LOG_FILE is defined right after its declaration
+print(f"DEBUG: LOG_FILE defined as: {LOG_FILE}")
 
 # Import functions from modules
 from utils import (

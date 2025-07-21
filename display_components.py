@@ -1,4 +1,4 @@
-# display_components.py - Version 1.39
+# display_components.py - Version 1.41
 
 import streamlit as st
 import pandas as pd
@@ -14,7 +14,7 @@ from utils import backtest_strategy, calculate_indicators, generate_signals_for_
 # === Helper for Indicator Display ===
 def format_indicator_display(signal_key, current_value, selected, signals_dict):
     """
-    Formats and displays a single technical indicat or's concise information.
+    Formats and displays a single technical indicator's concise information.
     """
     if not selected:
         return ""
@@ -120,93 +120,7 @@ def plot_generic_payoff_chart(stock_prices, payoffs, legs, strategy_name, ticker
     fig.tight_layout()
     return fig
 
-def plot_automated_strategy_payoff(strategy_details, current_stock_price, ticker):
-    """
-    Generates and displays an option payoff chart for the automated recommended strategy.
-    """
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.axhline(0, color='gray', linestyle='--', linewidth=0.8, label='Breakeven Line') # Breakeven line
-
-    strategy_type = strategy_details['Strategy']
-    
-    # Determine the range of stock prices for the chart
-    # Use current stock price and relevant strikes to set a good range
-    min_price = current_stock_price * 0.8
-    max_price = current_stock_price * 1.2
-
-    if strategy_type == "Bull Call Spread":
-        buy_strike = strategy_details['Contracts']['Buy']['strike']
-        sell_strike = strategy_details['Contracts']['Sell']['strike']
-        # Safely convert net_debit string to float
-        net_debit_str = strategy_details['Net Debit'].replace('~', '').replace('$', '')
-        net_debit = float(net_debit_str) if net_debit_str else 0.0
-
-        min_price = min(buy_strike, sell_strike, current_stock_price) * 0.9
-        max_price = max(buy_strike, sell_strike, current_stock_price) * 1.1
-
-        stock_prices = np.linspace(min_price, max_price, 200)
-        
-        # Calculate payoff for Bull Call Spread
-        payoff = np.maximum(0, stock_prices - buy_strike) - np.maximum(0, stock_prices - sell_strike) - net_debit
-        
-        ax.plot(stock_prices, payoff, label=f'{strategy_type} Payoff', color='blue')
-        
-        # Mark key points
-        ax.axvline(buy_strike, color='green', linestyle=':', label=f'Buy Strike: ${buy_strike:.2f}')
-        ax.axvline(sell_strike, color='red', linestyle=':', label=f'Sell Strike: ${sell_strike:.2f}')
-        
-        breakeven = buy_strike + net_debit
-        ax.axvline(breakeven, color='purple', linestyle='--', label=f'Breakeven: ${breakeven:.2f}')
-        
-        max_profit = (sell_strike - buy_strike) - net_debit
-        max_loss = -net_debit
-        
-        ax.text(stock_prices[-1], max_profit, f'Max Profit: ${max_profit:.2f}', verticalalignment='bottom', horizontalalignment='right', color='green', fontsize=9)
-        ax.text(stock_prices[-1], max_loss, f'Max Loss: ${max_loss:.2f}', verticalalignment='top', horizontalalignment='right', color='red', fontsize=9)
-
-    elif strategy_type in ["Buy ITM Call", "Buy ATM Call"]:
-        strike = float(strategy_details['Strike'].replace('$', ''))
-        # Safely convert entry_price string to float
-        entry_premium_str = strategy_details['Entry Price'].replace('~', '').replace('$', '')
-        entry_premium = float(entry_premium_str) if entry_premium_str else 0.0
-        
-        min_price = min(strike, current_stock_price) * 0.9
-        max_price = max(strike, current_stock_price) * 1.1 + entry_premium * 2 # Extend range for unlimited profit
-        
-        stock_prices = np.linspace(min_price, max_price, 200)
-        
-        # Calculate payoff for Buy Call
-        payoff = np.maximum(0, stock_prices - strike) - entry_premium
-        
-        ax.plot(stock_prices, payoff, label=f'{strategy_type} Payoff', color='blue')
-        
-        # Mark key points
-        ax.axvline(strike, color='green', linestyle=':', label=f'Strike: ${strike:.2f}')
-        
-        breakeven = strike + entry_premium
-        ax.axvline(breakeven, color='purple', linestyle='--', label=f'Breakeven: ${breakeven:.2f}')
-        
-        max_loss = -entry_premium
-        
-        ax.text(stock_prices[-1], payoff[-1], 'Max Profit: Unlimited', verticalalignment='bottom', horizontalalignment='right', color='green', fontsize=9)
-        ax.text(stock_prices[-1], max_loss, f'Max Loss: ${max_loss:.2f}', verticalalignment='top', horizontalalignment='right', color='red', fontsize=9)
-
-    else:
-        ax.text(0.5, 0.5, "Payoff chart not available for this strategy.", transform=ax.transAxes,
-                horizontalalignment='center', verticalalignment='center', fontsize=12, color='gray')
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_frame_on(False)
-        plt.close(fig) # Close the figure if no chart is drawn to prevent memory leaks
-        return None # Return None if no chart is generated
-
-    ax.set_title(f'{ticker} {strategy_type} Payoff Chart')
-    ax.set_xlabel('Stock Price at Expiration ($)')
-    ax.set_ylabel('Profit/Loss ($)')
-    ax.legend()
-    ax.grid(True, linestyle='--', alpha=0.6)
-    fig.tight_layout()
-    return fig
+# Removed the plot_automated_strategy_payoff function as it's no longer used.
 
 def display_interactive_payoff_calculator(current_stock_price, ticker):
     """
@@ -618,21 +532,10 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
                     ]
                 st.table(pd.DataFrame(option_metrics).set_index("Metric"))
 
-             # --- Add the Options Profit Calculator link here ---
+            # --- Add the Options Profit Calculator link here ---
             st.markdown("---")
             st.markdown("🔗 **External Tool:** [Options Profit Calculator](https://www.optionsprofitcalculator.com/)")
             # --- End of added link ---
-
-            # --- Display Payoff Chart for Automated Strategy ---
-            st.markdown("---")
-            st.subheader("📊 Automated Strategy Payoff Chart")
-            # Removed the call to plot_automated_strategy_payoff here
-            # payoff_fig = plot_automated_strategy_payoff(trade_plan, current_stock_price, ticker)
-            # if payoff_fig: # Only display if a figure was successfully generated
-            #     st.pyplot(payoff_fig, clear_figure=True)
-            #     plt.close(payoff_fig) # Close the figure to free up memory
-            # else:
-            #     st.info("Automated strategy payoff chart could not be generated.")
         
         else: # This 'else' correctly belongs to the 'if trade_plan['status'] == 'success':
             st.warning(trade_plan['message'])
@@ -675,98 +578,4 @@ def display_trade_plan_options_tab(ticker, df, overall_confidence):
             # Define column descriptions for tooltips
             column_descriptions = {
                 'strike': 'The predetermined price at which the underlying asset can be bought (for a call) or sold (for a put) when the option is exercised.',
-                'Moneyness': 'Describes an option\'s relationship between its strike price and the underlying asset\'s current price (In-The-Money, At-The-Money, or Out-of-The-Money).',
-                'lastPrice': 'The last traded price of that specific option contract.',
-                'bid': 'The highest price a buyer is willing to pay for the option.',
-                'ask': 'The lowest price a seller is willing to accept for the option.',
-                'volume': 'The number of option contracts traded for that specific strike and expiration today. High volume indicates high trading activity and liquidity.',
-                'openInterest': 'The total number of outstanding option contracts that have not yet been closed or exercised. High open interest suggests strong market interest and good liquidity for that particular contract.',
-                'impliedVolatility': 'The market\'s expectation of how much the underlying stock\'s price will move in the future. Higher implied volatility generally means higher option premiums (prices), as there\'s a greater chance of the option moving in-the-money.',
-                'delta': 'Measures how much an option\'s price is expected to move for every $1 change in the underlying stock\'s price. Also represents the approximate probability of an option expiring in-the-money.',
-                'theta': 'Measures the rate at which an option\'s price decays over time (time decay). Theta is typically negative, meaning the option loses value as it gets closer to expiration, all else being equal.',
-                'gamma': 'Measures the rate of change of an option\'s delta. High gamma = faster delta changes.',
-                'vega': 'Measures how much an option\'s price is expected to change for every 1% change in implied volatility. Options with higher vega are more sensitive to changes in IV.',
-                'rho': 'Measures how much an option\'s price is expected to change for every 1% change in interest rates. This is typically less significant for short-term options.'
-            }
-
-            # Define the desired order of columns (moved this definition up)
-            desired_cols_to_display = ['strike', 'Moneyness', 'lastPrice', 'bid', 'ask', 'volume', 'openInterest', 'impliedVolatility', 'delta', 'theta', 'gamma', 'vega', 'rho']
-
-            # Prepare columns for display with tooltips
-            cols_to_display_with_tooltips = {}
-            for col in desired_cols_to_display:
-                if col in chain_to_display_copy.columns:
-                    cols_to_display_with_tooltips[col] = st.column_config.Column(
-                        col,
-                        help=column_descriptions.get(col, "No description available.")
-                    )
-
-            # Filter chain_to_display_copy to only include available and desired columns
-            final_cols_to_show = [col for col in desired_cols_to_display if col in chain_to_display_copy.columns]
-
-            if final_cols_to_show:
-                st.dataframe(
-                    chain_to_display_copy[final_cols_to_show].set_index('strike'),
-                    column_config=cols_to_display_with_tooltips
-                )
-            else:
-                st.info("No relevant columns found in the options chain to display.")
-    
-    st.markdown("---")
-    # Call the interactive payoff calculator
-    display_interactive_payoff_calculator(current_stock_price, ticker)
-
-
-def display_backtest_tab(ticker, selection):
-    """Displays the historical backtest results."""
-    st.subheader(f"🧪 Historical Backtest for {ticker}")
-    st.info(f"Simulating trades based on your **currently selected indicators**. Entry is triggered if ALL selected signals are positive.")
-    
-    daily_hist, _ = get_data(ticker, "2y", "1d")
-    if daily_hist is not None and not daily_hist.empty:
-        daily_df_calculated = calculate_indicators(daily_hist.copy(), is_intraday=False)
-
-        trades, wins, losses = backtest_strategy(daily_df_calculated, selection)
-        total_trades = wins + losses
-        win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Trades Simulated", total_trades)
-        col2.metric("Wins", wins)
-        col3.metric("Win Rate", f"{win_rate:.1f}%")
-        
-        if trades: st.dataframe(pd.DataFrame(trades).tail(20))
-        else: st.info("No trades were executed based on the current strategy and historical data. Please review the warnings above for potential reasons (e.g., insufficient data, indicator calculation issues, or strict entry conditions).")
-    else:
-        st.warning("Could not fetch daily data for backtesting or data is empty. Ensure the ticker is valid and enough historical data is available for the selected period (e.g., 2 years).")
-
-def display_news_info_tab(ticker, info, finviz_data):
-    """Displays news and company information."""
-    st.subheader(f"📰 News & Information for {ticker}")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### ℹ️ Company Info")
-        st.write(f"**Name:** {info.get('longName', ticker)}")
-        st.write(f"**Sector:** {info.get('sector', 'N/A')}")
-        st.markdown("#### 🔗 External Research Links")
-        st.markdown(f"- [Yahoo Finance]({info.get('website', 'https://finance.yahoo.com')}) | [Finviz](https://finviz.com/quote.ashx?t={ticker})")
-    with col2:
-        st.markdown("#### 📅 Company Calendar")
-        stock_obj_for_cal = yf.Ticker(ticker)
-        if stock_obj_for_cal and hasattr(stock_obj_for_cal, 'calendar') and isinstance(stock_obj_for_cal.calendar, pd.DataFrame) and not stock_obj_for_cal.empty:
-            st.dataframe(stock_obj_for_cal.calendar.T)
-        else:
-            st.info("No upcoming calendar events found.")
-    st.markdown("#### 🗞️ Latest Headlines")
-    if finviz_data and finviz_data.get('headlines'):
-        for h in finviz_data['headlines']:
-            st.markdown(f"_{h}_")
-    else:
-        st.info("No recent headlines found or automated scoring is disabled.")
-
-def display_trade_log_tab(LOG_FILE, ticker, timeframe, overall_confidence):
-    """Displays and manages the trade log."""
-    st.subheader("📝 Log Your Trade Analysis")
-    user_notes = st.text_area("Add your personal notes or trade thesis here:", key=f"trade_notes_{ticker}")
-    
-    st.info("Trade log functionality is pending implementation.")
+                'Moneyness': 'Describes an option\'s relationship between its strike price and the underlying asset\'s current price (In-The-Money, At-The-Money, or Out-of-
