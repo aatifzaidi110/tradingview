@@ -1,4 +1,4 @@
-# app.py - Version 1.21
+# app.py - Version 1.22
 # app.py
 import sys
 import os
@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # === Constants and Configuration ===
 # Moved LOG_FILE definition to the top to ensure it's always defined
 LOG_FILE = "trade_log.csv" 
-# Debugging: Confirm LOG_FILE is defined right after its declaration
+# Debugging: Confirm LOG_FILE is defined right after its declaration (Minor update for refresh)
 print(f"DEBUG: LOG_FILE defined as: {LOG_FILE}")
 
 # Import functions from modules

@@ -1,4 +1,4 @@
-# display_components.py - Version 1.42
+# display_components.py - Version 1.43 (Minor update to force refresh)
 
 import streamlit as st
 import pandas as pd
@@ -54,7 +54,7 @@ def calculate_payoff_from_legs(stock_prices, legs):
         if option_type == 'call':
             payoff_per_share = np.maximum(0, stock_prices - strike)
         elif option_type == 'put':
-            payoff_per_share = np.maximum(0, strike - stock_prices) # Corrected line
+            payoff_per_share = np.maximum(0, strike - stock_prices)
         else:
             # This case should ideally be prevented by input validation
             continue
