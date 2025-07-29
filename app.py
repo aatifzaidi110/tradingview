@@ -54,6 +54,15 @@ ticker_input = st.sidebar.text_area("Enter Ticker Symbol(s) (comma or newline se
 # Split the input into a list of tickers, remove empty strings
 tickers = [t.strip() for t in ticker_input.replace(',', '\n').split('\n') if t.strip()]
 
+# Analyze Ticker Button
+st.sidebar.markdown("---")
+analyze_button = st.sidebar.button("Analyze Ticker")
+
+# Clear Cache Button
+if st.sidebar.button("Clear Cache"):
+    st.cache_data.clear()
+    st.rerun()
+
 timeframe = st.sidebar.radio("Choose Trading Style:", ["Scalp Trading", "Day Trading", "Swing Trading", "Position Trading"], index=2)
 
 st.sidebar.header("🔧 Technical Indicator Selection")
